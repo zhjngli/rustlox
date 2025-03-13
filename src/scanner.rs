@@ -195,11 +195,7 @@ impl<'a> Scanner<'a> {
                 '/' => {
                     if self.match_next('/') {
                         // comment goes until the end of the line
-                        while let Some(c) = self.source.peek() {
-                            if *c != '\n' {
-                                self.source.next();
-                            }
-                        }
+                        while self.source.next_if(|&c| c != '\n').is_some() {}
                         None
                     } else {
                         Some(Token::new(
