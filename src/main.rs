@@ -1,3 +1,6 @@
+pub mod errors;
+pub mod expr;
+pub mod parser;
 pub mod scanner;
 pub mod token;
 
@@ -6,6 +9,7 @@ use std::{
     io::{stdin, stdout, Error, ErrorKind, Write},
 };
 
+use parser::Parser;
 use scanner::Scanner;
 
 #[derive(Debug)]
@@ -39,23 +43,21 @@ impl Lox {
     }
 
     fn run(&self, s: String) -> Result<(), Error> {
-        println!("string: {:?}", s);
+        println!("string: {:?}\n", s);
+
         let mut scanner = Scanner::new(&s);
         let tokens = scanner.scan_tokens();
         tokens.iter().for_each(|t| {
             println!("{:?}", t);
         });
 
+        let mut parser = Parser::new(tokens);
+        let expr = parser.parse();
+        println!();
+        println!("{:?}", expr);
+
         Ok(())
     }
-}
-
-pub fn error(line: usize, message: String) {
-    report(line, message)
-}
-
-pub fn report(line: usize, message: String) {
-    eprintln!("[line {}] Error: {}", line, message);
 }
 
 fn main() -> Result<(), Error> {
