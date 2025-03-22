@@ -1,4 +1,5 @@
 use std::{
+    fmt::{Display, Formatter, Result as FmtResult},
     fs,
     io::{stdin, stdout, Error, ErrorKind, Write},
 };
@@ -14,9 +15,21 @@ pub enum LoxValue {
     Null,
 }
 
+impl Display for LoxValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Self::Bool(b) => write!(f, "{}", b),
+            Self::Number(n) => write!(f, "{}", n),
+            Self::String(s) => write!(f, "{}", s),
+            Self::Null => write!(f, "null"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum Exits {
     RuntimeError(Token, String),
+    // TODO: should ParseError be here?
 }
 
 #[derive(Debug)]
@@ -59,12 +72,17 @@ impl Lox {
         });
 
         let mut parser = Parser::new(tokens);
-        let expr = parser.parse();
+        let stmts_result = parser.parse();
+        let stmts;
+        match stmts_result {
+            Ok(r) => stmts = r,
+            Err(e) => return Err(Error::new(ErrorKind::Other, format!("{:?}", e))),
+        }
         println!();
-        println!("{:?}", expr);
+        println!("{:?}", stmts);
 
         let mut interpreter = Interpreter::new();
-        match interpreter.interpret(&expr) {
+        match interpreter.interpret(&stmts) {
             Ok(()) => Ok(()),
             Err(e) => Err(Error::new(ErrorKind::Other, format!("{:?}", e))),
         }

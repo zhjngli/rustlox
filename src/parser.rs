@@ -1,5 +1,6 @@
 use crate::{
     expr::Expr,
+    stmt::Stmt,
     token::{Token, TokenLiteral, TokenType},
 };
 
@@ -10,20 +11,41 @@ pub struct Parser<'a> {
 }
 
 #[derive(Debug)]
-struct ParseError;
+pub struct ParseError;
 
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
         Parser { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Expr {
-        match self.expression() {
-            Ok(e) => e,
-            Err(_) => Expr::Literal {
-                value: TokenLiteral::Null,
-            },
+    pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut stmts = Vec::new();
+        while !self.is_at_end() {
+            stmts.push(self.statement()?);
         }
+        Ok(stmts)
+    }
+
+    fn statement(&mut self) -> Result<Stmt, ParseError> {
+        if self.match_next(&[TokenType::Print]) {
+            return self.print_statement();
+        }
+        self.expression_statement()
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+        let value = self.expression()?;
+        self.consume(&TokenType::Semicolon, "Expect ';' after value.".to_owned())?;
+        Ok(Stmt::Print { expr: value })
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+        let expr = self.expression()?;
+        self.consume(
+            &TokenType::Semicolon,
+            "Expect ';' after expression.".to_owned(),
+        )?;
+        Ok(Stmt::Expr { expr: expr })
     }
 
     fn expression(&mut self) -> Result<Expr, ParseError> {

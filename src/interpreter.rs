@@ -1,16 +1,17 @@
 use crate::{
-    expr::{Expr, Visitor},
+    expr::{Expr, Visitor as EVisitor},
     lox::{
         Exits,
         LoxValue::{self, Bool, Null, Number, String},
     },
+    stmt::{Stmt, Visitor as SVisitor},
     token::{TokenLiteral, TokenType},
 };
 
 #[derive(Debug)]
 pub struct Interpreter {}
 
-impl Visitor<Result<LoxValue, Exits>> for Interpreter {
+impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
         match expr {
             Expr::Literal { value } => match value {
@@ -107,15 +108,35 @@ impl Visitor<Result<LoxValue, Exits>> for Interpreter {
     }
 }
 
+impl SVisitor<Result<(), Exits>> for Interpreter {
+    fn visit_stmt(&mut self, stmt: &crate::stmt::Stmt) -> Result<(), Exits> {
+        match stmt {
+            Stmt::Expr { expr } => {
+                self.evaluate(expr)?;
+                Ok(())
+            }
+            Stmt::Print { expr } => {
+                println!("{}", self.evaluate(expr)?);
+                Ok(())
+            }
+        }
+    }
+}
+
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {}
     }
 
-    pub fn interpret(&mut self, expr: &Expr) -> Result<(), Exits> {
-        let value = self.evaluate(expr)?;
-        println!("{:?}", value);
+    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), Exits> {
+        for stmt in stmts {
+            self.execute(stmt)?;
+        }
         Ok(())
+    }
+
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), Exits> {
+        stmt.accept(self)
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
