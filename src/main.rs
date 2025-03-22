@@ -1,64 +1,17 @@
 pub mod errors;
 pub mod expr;
+pub mod interpreter;
+pub mod lox;
 pub mod parser;
 pub mod scanner;
 pub mod token;
 
 use std::{
-    env, fs,
-    io::{stdin, stdout, Error, ErrorKind, Write},
+    env,
+    io::{Error, ErrorKind},
 };
 
-use parser::Parser;
-use scanner::Scanner;
-
-#[derive(Debug)]
-struct Lox {}
-
-impl Lox {
-    pub fn new() -> Self {
-        Lox {}
-    }
-
-    fn run_file(&self, f: &String) -> Result<(), Error> {
-        self.run(fs::read_to_string(f)?)
-    }
-
-    fn run_prompt(&mut self) -> Result<(), Error> {
-        loop {
-            print!("> ");
-            stdout().flush().unwrap();
-            let mut buffer = String::new();
-            stdin().read_line(&mut buffer)?;
-            if buffer.trim().is_empty() {
-                break;
-            } else {
-                match self.run(buffer.clone()) {
-                    Ok(()) => continue,
-                    e => return e,
-                }
-            }
-        }
-        Ok(())
-    }
-
-    fn run(&self, s: String) -> Result<(), Error> {
-        println!("string: {:?}\n", s);
-
-        let mut scanner = Scanner::new(&s);
-        let tokens = scanner.scan_tokens();
-        tokens.iter().for_each(|t| {
-            println!("{:?}", t);
-        });
-
-        let mut parser = Parser::new(tokens);
-        let expr = parser.parse();
-        println!();
-        println!("{:?}", expr);
-
-        Ok(())
-    }
-}
+use crate::lox::Lox;
 
 fn main() -> Result<(), Error> {
     let mut lox = Lox::new();
