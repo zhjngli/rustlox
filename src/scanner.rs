@@ -3,27 +3,34 @@ use std::{collections::HashMap, iter::Peekable, str::Chars};
 
 use crate::{
     errors::lex_error,
-    token::{Token, TokenLiteral, TokenType},
+    token::TokenLiteral::{Null, NumberLit, StringLit},
+    token::TokenType::{
+        And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False, For, Fun,
+        Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual, Minus, Nil,
+        Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash, Star,
+        String as TString, Super, This, True, Var, While,
+    },
+    token::{Token, TokenType},
 };
 
 static KEYWORDS: Lazy<HashMap<String, TokenType>> = Lazy::new(|| {
     let mut m = HashMap::new();
-    m.insert("and".to_string(), TokenType::And);
-    m.insert("class".to_string(), TokenType::Class);
-    m.insert("else".to_string(), TokenType::Else);
-    m.insert("false".to_string(), TokenType::False);
-    m.insert("for".to_string(), TokenType::For);
-    m.insert("fun".to_string(), TokenType::Fun);
-    m.insert("if".to_string(), TokenType::If);
-    m.insert("nil".to_string(), TokenType::Nil);
-    m.insert("or".to_string(), TokenType::Or);
-    m.insert("print".to_string(), TokenType::Print);
-    m.insert("return".to_string(), TokenType::Return);
-    m.insert("super".to_string(), TokenType::Super);
-    m.insert("this".to_string(), TokenType::This);
-    m.insert("true".to_string(), TokenType::True);
-    m.insert("var".to_string(), TokenType::Var);
-    m.insert("while".to_string(), TokenType::While);
+    m.insert("and".to_string(), And);
+    m.insert("class".to_string(), Class);
+    m.insert("else".to_string(), Else);
+    m.insert("false".to_string(), False);
+    m.insert("for".to_string(), For);
+    m.insert("fun".to_string(), Fun);
+    m.insert("if".to_string(), If);
+    m.insert("nil".to_string(), Nil);
+    m.insert("or".to_string(), Or);
+    m.insert("print".to_string(), Print);
+    m.insert("return".to_string(), Return);
+    m.insert("super".to_string(), Super);
+    m.insert("this".to_string(), This);
+    m.insert("true".to_string(), True);
+    m.insert("var".to_string(), Var);
+    m.insert("while".to_string(), While);
     m
 });
 
@@ -51,12 +58,8 @@ impl<'a> Scanner<'a> {
             }
         }
 
-        self.tokens.push(Token::new(
-            TokenType::Eof,
-            "".to_string(),
-            TokenLiteral::Null,
-            self.line,
-        ));
+        self.tokens
+            .push(Token::new(Eof, "".to_string(), Null, self.line));
         &self.tokens
     }
 
@@ -64,132 +67,42 @@ impl<'a> Scanner<'a> {
         let opt_c = self.source.next();
         match opt_c {
             Some(c) => match c {
-                '(' => Some(Token::new(
-                    TokenType::LeftParen,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                ')' => Some(Token::new(
-                    TokenType::RightParen,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                '{' => Some(Token::new(
-                    TokenType::LeftBrace,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                '}' => Some(Token::new(
-                    TokenType::RightBrace,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                ',' => Some(Token::new(
-                    TokenType::Comma,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                '.' => Some(Token::new(
-                    TokenType::Dot,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                '-' => Some(Token::new(
-                    TokenType::Minus,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                '+' => Some(Token::new(
-                    TokenType::Plus,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                ';' => Some(Token::new(
-                    TokenType::Semicolon,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
-                '*' => Some(Token::new(
-                    TokenType::Star,
-                    c.to_string(),
-                    TokenLiteral::Null,
-                    self.line,
-                )),
+                '(' => Some(Token::new(LeftParen, c.to_string(), Null, self.line)),
+                ')' => Some(Token::new(RightParen, c.to_string(), Null, self.line)),
+                '{' => Some(Token::new(LeftBrace, c.to_string(), Null, self.line)),
+                '}' => Some(Token::new(RightBrace, c.to_string(), Null, self.line)),
+                ',' => Some(Token::new(Comma, c.to_string(), Null, self.line)),
+                '.' => Some(Token::new(Dot, c.to_string(), Null, self.line)),
+                '-' => Some(Token::new(Minus, c.to_string(), Null, self.line)),
+                '+' => Some(Token::new(Plus, c.to_string(), Null, self.line)),
+                ';' => Some(Token::new(Semicolon, c.to_string(), Null, self.line)),
+                '*' => Some(Token::new(Star, c.to_string(), Null, self.line)),
                 '!' => {
                     if self.match_next('=') {
-                        Some(Token::new(
-                            TokenType::BangEqual,
-                            String::from("!="),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(BangEqual, "!=".to_owned(), Null, self.line))
                     } else {
-                        Some(Token::new(
-                            TokenType::Bang,
-                            String::from('!'),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(Bang, '!'.to_string(), Null, self.line))
                     }
                 }
                 '=' => {
                     if self.match_next('=') {
-                        Some(Token::new(
-                            TokenType::EqualEqual,
-                            String::from("=="),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(EqualEqual, "==".to_owned(), Null, self.line))
                     } else {
-                        Some(Token::new(
-                            TokenType::Equal,
-                            String::from('='),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(Equal, '='.to_string(), Null, self.line))
                     }
                 }
                 '<' => {
                     if self.match_next('=') {
-                        Some(Token::new(
-                            TokenType::LessEqual,
-                            String::from("<="),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(LessEqual, "<=".to_owned(), Null, self.line))
                     } else {
-                        Some(Token::new(
-                            TokenType::Less,
-                            String::from('<'),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(Less, '<'.to_string(), Null, self.line))
                     }
                 }
                 '>' => {
                     if self.match_next('=') {
-                        Some(Token::new(
-                            TokenType::GreaterEqual,
-                            String::from(">="),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(GreaterEqual, ">=".to_owned(), Null, self.line))
                     } else {
-                        Some(Token::new(
-                            TokenType::Greater,
-                            String::from('>'),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(Greater, '>'.to_string(), Null, self.line))
                     }
                 }
                 '/' => {
@@ -198,12 +111,7 @@ impl<'a> Scanner<'a> {
                         while self.source.next_if(|&c| c != '\n').is_some() {}
                         None
                     } else {
-                        Some(Token::new(
-                            TokenType::Slash,
-                            c.to_string(),
-                            TokenLiteral::Null,
-                            self.line,
-                        ))
+                        Some(Token::new(Slash, c.to_string(), Null, self.line))
                     }
                 }
                 ' ' | '\r' | '\t' => None,
@@ -243,17 +151,13 @@ impl<'a> Scanner<'a> {
         }
         if self.source.peek() == None {
             // at end of source
-            lex_error(self.line, "Unterminated string".to_string())
+            lex_error(self.line, "Unterminated string".to_owned())
         }
         // the closing '"' char
         self.source.next();
 
-        Token::new(
-            TokenType::String,
-            s.iter().collect(),
-            TokenLiteral::StringLit(s.iter().collect()),
-            self.line,
-        )
+        let lex: String = s.iter().collect();
+        Token::new(TString, lex.clone(), StringLit(lex), self.line)
     }
 
     fn number(&mut self, init: char) -> Token {
@@ -285,12 +189,7 @@ impl<'a> Scanner<'a> {
         let s: String = n.iter().collect();
         let result = s.parse::<f64>();
         match result {
-            Ok(num) => Token::new(
-                TokenType::Number,
-                n.iter().collect(),
-                TokenLiteral::NumberLit(num),
-                self.line,
-            ),
+            Ok(num) => Token::new(Number, n.iter().collect(), NumberLit(num), self.line),
             Err(e) => panic!("Couldn't parse number from {}: {}", s, e),
         }
     }
@@ -311,8 +210,8 @@ impl<'a> Scanner<'a> {
         let id = s.iter().collect();
         let token_type = match KEYWORDS.get(&id) {
             Some(tt) => tt.clone(),
-            None => TokenType::Identifier,
+            None => Identifier,
         };
-        Token::new(token_type, id, TokenLiteral::Null, self.line)
+        Token::new(token_type, id, Null, self.line)
     }
 }
