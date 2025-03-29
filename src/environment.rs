@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     lox::{Exits, LoxValue},
@@ -7,7 +7,7 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct Environment {
-    enclosing: Option<Box<RefCell<Environment>>>, // TODO: maybe Rc instead of Box?
+    enclosing: Option<Rc<RefCell<Environment>>>, // TODO: maybe Rc instead of Box?
     values: HashMap<String, LoxValue>,
 }
 
@@ -19,9 +19,9 @@ impl Environment {
         }
     }
 
-    pub fn enclosed(enclosing: Environment) -> Self {
+    pub fn enclosed(enclosing: Rc<RefCell<Environment>>) -> Self {
         Environment {
-            enclosing: Some(Box::new(RefCell::new(enclosing))),
+            enclosing: Some(enclosing),
             values: HashMap::new(),
         }
     }

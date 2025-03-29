@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{
     environment::Environment,
     expr::{Expr, Visitor as EVisitor},
@@ -11,7 +13,7 @@ use crate::{
 
 #[derive(Debug)]
 pub struct Interpreter {
-    environment: Environment,
+    environment: Rc<RefCell<Environment>>,
 }
 
 impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
@@ -23,11 +25,27 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                 TokenLiteral::StringLit(s) => Ok(String(s.to_owned())),
                 TokenLiteral::Null => Ok(Null),
             },
+            Expr::Logical { left, op, right } => {
+                let left = self.evaluate(left)?;
+                match op.token_type {
+                    TokenType::Or => {
+                        if self.is_truthy(&left) {
+                            return Ok(left);
+                        }
+                    }
+                    _ => {
+                        if !self.is_truthy(&left) {
+                            return Ok(left);
+                        }
+                    }
+                }
+                self.evaluate(right)
+            }
             Expr::Grouping { expr } => self.evaluate(expr),
             Expr::Unary { op, expr } => {
                 let right = self.evaluate(expr)?;
                 match op.token_type {
-                    TokenType::Bang => return Ok(Bool(!self.is_truthy(right))),
+                    TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
                     TokenType::Minus => match right {
                         Number(r) => return Ok(Number(-r)),
                         _ => panic!("minus error"),
@@ -107,10 +125,12 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            Expr::Variable { name } => self.environment.get(name.clone()),
+            Expr::Variable { name } => self.environment.borrow().get(name.clone()),
             Expr::Assign { name, value } => {
                 let val = self.evaluate(value)?;
-                self.environment.assign(name.clone(), val.clone())?;
+                self.environment
+                    .borrow_mut()
+                    .assign(name.clone(), val.clone())?;
                 Ok(val)
             }
         }
@@ -124,6 +144,21 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 self.evaluate(expr)?;
                 Ok(())
             }
+            Stmt::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let cond = self.evaluate(condition)?;
+                if self.is_truthy(&cond) {
+                    self.execute(&then_branch)
+                } else {
+                    match else_branch {
+                        Some(e) => self.execute(e),
+                        None => Ok(()),
+                    }
+                }
+            }
             Stmt::Print { expr } => {
                 println!("{}", self.evaluate(expr)?);
                 Ok(())
@@ -134,7 +169,17 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                     Some(e) => value = self.evaluate(e)?,
                     None => value = LoxValue::Null,
                 }
-                self.environment.define(name.lexeme.clone(), value);
+                self.environment
+                    .borrow_mut()
+                    .define(name.lexeme.clone(), value);
+                Ok(())
+            }
+            Stmt::While { condition, body } => {
+                let mut cond = self.evaluate(condition)?;
+                while self.is_truthy(&cond) {
+                    self.execute(body)?;
+                    cond = self.evaluate(condition)?;
+                }
                 Ok(())
             }
             Stmt::Block { stmts } => {
@@ -147,7 +192,7 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Interpreter {
-            environment: Environment::new(),
+            environment: Rc::new(RefCell::new(Environment::new())),
         }
     }
 
@@ -163,8 +208,8 @@ impl Interpreter {
     }
 
     fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), Exits> {
-        let previous = self.environment.clone();
-        self.environment = env;
+        let previous = Rc::clone(&self.environment);
+        self.environment = Rc::new(RefCell::new(env));
         let result = stmts.iter().try_for_each(|s| self.execute(s));
         self.environment = previous;
         result
@@ -174,9 +219,9 @@ impl Interpreter {
         expr.accept(self)
     }
 
-    fn is_truthy(&self, lv: LoxValue) -> bool {
+    fn is_truthy(&self, lv: &LoxValue) -> bool {
         match lv {
-            LoxValue::Bool(b) => b,
+            LoxValue::Bool(b) => *b,
             LoxValue::Null => false,
             _ => true,
         }

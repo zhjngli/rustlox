@@ -79,7 +79,9 @@ impl Lox {
             Err(e) => return Err(Error::new(ErrorKind::Other, format!("{:?}", e))),
         }
         println!();
-        println!("{:?}", stmts);
+        stmts.iter().for_each(|s| {
+            println!("{:?}", s);
+        });
 
         let mut interpreter = Interpreter::new();
         match interpreter.interpret(&stmts) {

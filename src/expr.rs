@@ -5,6 +5,11 @@ pub enum Expr {
     Literal {
         value: TokenLiteral,
     },
+    Logical {
+        left: Box<Expr>,
+        op: Token,
+        right: Box<Expr>,
+    },
     Grouping {
         expr: Box<Expr>,
     },
