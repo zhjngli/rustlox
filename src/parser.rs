@@ -20,15 +20,48 @@ impl<'a> Parser<'a> {
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
         let mut stmts = Vec::new();
+        let mut error = false;
         while !self.is_at_end() {
-            stmts.push(self.statement()?);
+            match self.declaration() {
+                Ok(s) => stmts.push(s),
+                Err(_) => error = true,
+            }
         }
-        Ok(stmts)
+        if error {
+            Err(ParseError {})
+        } else {
+            Ok(stmts)
+        }
+    }
+
+    fn expression(&mut self) -> Result<Expr, ParseError> {
+        self.assignment()
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, ParseError> {
+        let stmt_result;
+        if self.match_next(&[TokenType::Var]) {
+            stmt_result = self.var_declaration();
+        } else {
+            stmt_result = self.statement();
+        }
+        match stmt_result {
+            Ok(s) => Ok(s),
+            Err(_) => {
+                self.synchronize();
+                Err(ParseError {})
+            }
+        }
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_next(&[TokenType::Print]) {
             return self.print_statement();
+        }
+        if self.match_next(&[TokenType::LeftBrace]) {
+            return Ok(Stmt::Block {
+                stmts: self.block()?,
+            });
         }
         self.expression_statement()
     }
@@ -37,6 +70,21 @@ impl<'a> Parser<'a> {
         let value = self.expression()?;
         self.consume(&TokenType::Semicolon, "Expect ';' after value.".to_owned())?;
         Ok(Stmt::Print { expr: value })
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self
+            .consume(&TokenType::Identifier, "Expect variable name.".to_owned())?
+            .clone();
+        let mut initializer = None;
+        if self.match_next(&[TokenType::Equal]) {
+            initializer = Some(self.expression()?.clone());
+        }
+        self.consume(
+            &TokenType::Semicolon,
+            "Expect ';' after variable declaration.".to_owned(),
+        )?;
+        Ok(Stmt::Var { name, initializer })
     }
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -48,8 +96,34 @@ impl<'a> Parser<'a> {
         Ok(Stmt::Expr { expr: expr })
     }
 
-    fn expression(&mut self) -> Result<Expr, ParseError> {
-        self.equality()
+    fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut stmts = Vec::new();
+        while !self.check(&TokenType::RightBrace) && !self.is_at_end() {
+            stmts.push(self.declaration()?);
+        }
+        self.consume(&TokenType::RightBrace, "Expect '}' after block.".to_owned())?;
+        Ok(stmts)
+    }
+
+    fn assignment(&mut self) -> Result<Expr, ParseError> {
+        let expr = self.equality()?;
+        if self.match_next(&[TokenType::Equal]) {
+            let equals = self.previous().clone();
+            let value = self.assignment()?;
+
+            match expr {
+                Expr::Variable { name } => {
+                    return Ok(Expr::Assign {
+                        name,
+                        value: Box::new(value),
+                    })
+                }
+                _ => {
+                    self.error(&equals, "Invalid assignment target.".to_owned());
+                }
+            }
+        }
+        Ok(expr)
     }
 
     fn equality(&mut self) -> Result<Expr, ParseError> {
@@ -123,6 +197,10 @@ impl<'a> Parser<'a> {
         } else if self.match_next(&[TokenType::Number, TokenType::String]) {
             return Ok(Expr::Literal {
                 value: self.previous().literal.clone(),
+            });
+        } else if self.match_next(&[TokenType::Identifier]) {
+            return Ok(Expr::Variable {
+                name: self.previous().clone(),
             });
         } else if self.match_next(&[TokenType::LeftParen]) {
             let expr = self.expression()?;

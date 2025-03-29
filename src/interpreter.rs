@@ -1,4 +1,5 @@
 use crate::{
+    environment::Environment,
     expr::{Expr, Visitor as EVisitor},
     lox::{
         Exits,
@@ -9,7 +10,9 @@ use crate::{
 };
 
 #[derive(Debug)]
-pub struct Interpreter {}
+pub struct Interpreter {
+    environment: Environment,
+}
 
 impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
@@ -104,12 +107,18 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
+            Expr::Variable { name } => self.environment.get(name.clone()),
+            Expr::Assign { name, value } => {
+                let val = self.evaluate(value)?;
+                self.environment.assign(name.clone(), val.clone())?;
+                Ok(val)
+            }
         }
     }
 }
 
 impl SVisitor<Result<(), Exits>> for Interpreter {
-    fn visit_stmt(&mut self, stmt: &crate::stmt::Stmt) -> Result<(), Exits> {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), Exits> {
         match stmt {
             Stmt::Expr { expr } => {
                 self.evaluate(expr)?;
@@ -119,13 +128,27 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 println!("{}", self.evaluate(expr)?);
                 Ok(())
             }
+            Stmt::Var { name, initializer } => {
+                let value;
+                match initializer {
+                    Some(e) => value = self.evaluate(e)?,
+                    None => value = LoxValue::Null,
+                }
+                self.environment.define(name.lexeme.clone(), value);
+                Ok(())
+            }
+            Stmt::Block { stmts } => {
+                self.execute_block(stmts, Environment::enclosed(self.environment.clone()))
+            }
         }
     }
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        Interpreter {}
+        Interpreter {
+            environment: Environment::new(),
+        }
     }
 
     pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), Exits> {
@@ -137,6 +160,14 @@ impl Interpreter {
 
     fn execute(&mut self, stmt: &Stmt) -> Result<(), Exits> {
         stmt.accept(self)
+    }
+
+    fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), Exits> {
+        let previous = self.environment.clone();
+        self.environment = env;
+        let result = stmts.iter().try_for_each(|s| self.execute(s));
+        self.environment = previous;
+        result
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {

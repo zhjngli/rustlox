@@ -17,6 +17,13 @@ pub enum Expr {
         op: Token,
         right: Box<Expr>,
     },
+    Variable {
+        name: Token,
+    },
+    Assign {
+        name: Token,
+        value: Box<Expr>,
+    },
 }
 
 pub trait Visitor<T> {
