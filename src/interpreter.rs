@@ -48,7 +48,10 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
                     TokenType::Minus => match right {
                         Number(r) => return Ok(Number(-r)),
-                        _ => panic!("minus error"),
+                        _ => Err(Exits::RuntimeError(
+                            op.clone(),
+                            format!("Operand of ({:?}) must be a number.", op).to_owned(),
+                        )),
                     },
                     _ => Ok(Null),
                 }
