@@ -5,6 +5,11 @@ pub enum Stmt {
     Expr {
         expr: Expr,
     },
+    Function {
+        name: Token,
+        params: Vec<Token>,
+        body: Vec<Stmt>,
+    },
     If {
         condition: Expr,
         then_branch: Box<Stmt>,
@@ -12,6 +17,10 @@ pub enum Stmt {
     },
     Print {
         expr: Expr,
+    },
+    Return {
+        keyword: Token,
+        value: Option<Expr>,
     },
     Var {
         name: Token,

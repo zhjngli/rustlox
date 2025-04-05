@@ -1,11 +1,16 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     environment::Environment,
     expr::{Expr, Visitor as EVisitor},
     lox::{
-        Exits,
-        LoxValue::{self, Bool, Null, Number, String},
+        Callable, Exits, Function, LoxCallable,
+        LoxValue::{self, Bool, CallableVal, Null, Number, String},
+        NativeFunction,
     },
     stmt::{Stmt, Visitor as SVisitor},
     token::{TokenLiteral, TokenType},
@@ -14,6 +19,7 @@ use crate::{
 #[derive(Debug)]
 pub struct Interpreter {
     environment: Rc<RefCell<Environment>>,
+    pub globals: Rc<RefCell<Environment>>,
 }
 
 impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
@@ -128,6 +134,37 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
+            Expr::Call {
+                callee,
+                paren,
+                args,
+            } => {
+                let callee = self.evaluate(callee)?;
+                let args_vals: Vec<LoxValue> = args
+                    .into_iter()
+                    .map(|a| self.evaluate(a))
+                    .collect::<Result<Vec<LoxValue>, Exits>>()?;
+
+                match callee {
+                    CallableVal(callable) => {
+                        if args_vals.len() != callable.arity() {
+                            return Err(Exits::RuntimeError(
+                                paren.clone(),
+                                format!(
+                                    "Expected {} arguments but got {}.",
+                                    callable.arity(),
+                                    args_vals.len()
+                                ),
+                            ));
+                        }
+                        callable.call(self, args_vals)
+                    }
+                    _ => Err(Exits::RuntimeError(
+                        paren.clone(),
+                        "Can only call functions and classes".to_owned(),
+                    )),
+                }
+            }
             Expr::Variable { name } => self.environment.borrow().get(name.clone()),
             Expr::Assign { name, value } => {
                 let val = self.evaluate(value)?;
@@ -145,6 +182,18 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
         match stmt {
             Stmt::Expr { expr } => {
                 self.evaluate(expr)?;
+                Ok(())
+            }
+            Stmt::Function {
+                name,
+                params: _,
+                body: _,
+            } => {
+                let function = Function::new(stmt.clone());
+                self.environment.borrow_mut().define(
+                    name.lexeme.clone(),
+                    CallableVal(Callable::Function(function)),
+                );
                 Ok(())
             }
             Stmt::If {
@@ -166,11 +215,15 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 println!("{}", self.evaluate(expr)?);
                 Ok(())
             }
+            Stmt::Return { keyword: _, value } => match value {
+                Some(v) => Err(Exits::Return(self.evaluate(v)?)),
+                None => Err(Exits::Return(Null)),
+            },
             Stmt::Var { name, initializer } => {
                 let value;
                 match initializer {
                     Some(e) => value = self.evaluate(e)?,
-                    None => value = LoxValue::Null,
+                    None => value = Null,
                 }
                 self.environment
                     .borrow_mut()
@@ -194,8 +247,25 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
 
 impl Interpreter {
     pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new()));
+        globals.borrow_mut().define(
+            "clock".to_owned(),
+            CallableVal(Callable::from(NativeFunction {
+                name: "clock".to_owned(),
+                arity: 0,
+                call: Box::new(|_, _| {
+                    let now = SystemTime::now();
+                    let duration = now
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards.");
+                    let seconds = duration.as_secs() as f64;
+                    Ok(Number(seconds))
+                }),
+            })),
+        );
         Interpreter {
-            environment: Rc::new(RefCell::new(Environment::new())),
+            environment: globals.clone(),
+            globals: globals,
         }
     }
 
@@ -210,7 +280,7 @@ impl Interpreter {
         stmt.accept(self)
     }
 
-    fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), Exits> {
+    pub fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), Exits> {
         let previous = Rc::clone(&self.environment);
         self.environment = Rc::new(RefCell::new(env));
         let result = stmts.iter().try_for_each(|s| self.execute(s));
@@ -224,8 +294,8 @@ impl Interpreter {
 
     fn is_truthy(&self, lv: &LoxValue) -> bool {
         match lv {
-            LoxValue::Bool(b) => *b,
-            LoxValue::Null => false,
+            Bool(b) => *b,
+            Null => false,
             _ => true,
         }
     }
@@ -238,5 +308,11 @@ impl Interpreter {
             (Null, Null) => true,
             _ => false,
         }
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Self {
+        Self::new()
     }
 }

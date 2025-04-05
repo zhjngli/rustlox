@@ -1,17 +1,15 @@
-use std::{
-    fmt::{Display, Formatter, Result as FmtResult},
-    fs,
-    io::{stdin, stdout, Error, ErrorKind, Write},
-};
+use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
 
-use crate::scanner::Scanner;
-use crate::{interpreter::Interpreter, parser::Parser, token::Token};
+use enum_dispatch::enum_dispatch;
+
+use crate::{environment::Environment, interpreter::Interpreter, stmt::Stmt, token::Token};
 
 #[derive(Debug, Clone)]
 pub enum LoxValue {
     Bool(bool),
     Number(f64),
     String(String),
+    CallableVal(Callable),
     Null,
 }
 
@@ -21,6 +19,7 @@ impl Display for LoxValue {
             Self::Bool(b) => write!(f, "{}", b),
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
+            Self::CallableVal(c) => write!(f, "{:?}", c),
             Self::Null => write!(f, "null"),
         }
     }
@@ -28,65 +27,121 @@ impl Display for LoxValue {
 
 #[derive(Debug)]
 pub enum Exits {
-    RuntimeError(Token, String),
     // TODO: should ParseError be here?
+    RuntimeError(Token, String),
+    Return(LoxValue),
 }
 
-#[derive(Debug)]
-pub struct Lox {}
+#[enum_dispatch]
+pub trait LoxCallable {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits>;
 
-impl Lox {
-    pub fn new() -> Self {
-        Lox {}
+    fn arity(&self) -> usize;
+}
+
+#[enum_dispatch(LoxCallable)]
+#[derive(Debug, Clone)]
+pub enum Callable {
+    NativeFunction,
+    Function,
+}
+
+pub struct NativeFunction {
+    pub name: String,
+    pub arity: usize,
+    pub call: Box<dyn Fn(&mut Interpreter, Vec<LoxValue>) -> Result<LoxValue, Exits>>,
+}
+
+impl Display for NativeFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "<native fn {}>", self.name)
+    }
+}
+
+impl Debug for NativeFunction {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_struct("NativeFunction")
+            .field("name", &self.name)
+            .finish()
+    }
+}
+
+impl Clone for NativeFunction {
+    fn clone(&self) -> Self {
+        let name_clone = self.name.clone();
+        NativeFunction {
+            name: self.name.to_owned(),
+            arity: self.arity.clone(),
+            call: Box::new(move |_, _| panic!("Can't clone a native function: {}", name_clone)),
+        }
+    }
+}
+
+impl LoxCallable for NativeFunction {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+        (self.call)(interpreter, args)
     }
 
-    pub fn run_file(&self, f: &String) -> Result<(), Error> {
-        self.run(fs::read_to_string(f)?)
+    fn arity(&self) -> usize {
+        self.arity
     }
+}
 
-    pub fn run_prompt(&mut self) -> Result<(), Error> {
-        loop {
-            print!("> ");
-            stdout().flush().unwrap();
-            let mut buffer = String::new();
-            stdin().read_line(&mut buffer)?;
-            if buffer.trim().is_empty() {
-                break;
-            } else {
-                match self.run(buffer.clone()) {
-                    Ok(()) => continue,
-                    e => return e,
+#[derive(Debug, Clone)]
+pub struct Function {
+    declaration: Stmt,
+}
+
+fn fn_initialization_panic<T>() -> T {
+    panic!("Function not initialized with a function declaration.")
+}
+
+impl Function {
+    pub fn new(declaration: Stmt) -> Self {
+        match &declaration {
+            Stmt::Function { .. } => Function { declaration },
+            _ => fn_initialization_panic(),
+        }
+    }
+}
+
+impl Display for Function {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match &self.declaration {
+            Stmt::Function { name, .. } => write!(f, "<fn {}>", name.lexeme),
+            _ => fn_initialization_panic(),
+        }
+    }
+}
+
+impl LoxCallable for Function {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+        let mut environment = Environment::enclosed(interpreter.globals.clone());
+        match &self.declaration {
+            Stmt::Function {
+                name: _,
+                params,
+                body,
+            } => {
+                params.iter().enumerate().for_each(|(i, param)| {
+                    environment.define(param.lexeme.clone(), args.get(i).unwrap().clone());
+                });
+                let result = interpreter.execute_block(body, environment.to_owned());
+                match result {
+                    Ok(()) => (),
+                    Err(Exits::Return(value)) => return Ok(value),
+                    Err(runtime_error) => return Err(runtime_error),
                 }
             }
+            _ => fn_initialization_panic(),
         }
-        Ok(())
+        Ok(LoxValue::Null)
     }
 
-    fn run(&self, s: String) -> Result<(), Error> {
-        println!("string: {:?}\n", s);
-
-        let mut scanner = Scanner::new(&s);
-        let tokens = scanner.scan_tokens();
-        tokens.iter().for_each(|t| {
-            println!("{:?}", t);
-        });
-
-        let mut parser = Parser::new(tokens);
-        let stmts_result = parser.parse();
-        let stmts;
-        match stmts_result {
-            Ok(r) => stmts = r,
-            Err(e) => return Err(Error::new(ErrorKind::Other, format!("{:?}", e))),
-        }
-        println!();
-        stmts.iter().for_each(|s| {
-            println!("{:?}", s);
-        });
-
-        let mut interpreter = Interpreter::new();
-        match interpreter.interpret(&stmts) {
-            Ok(()) => Ok(()),
-            Err(e) => Err(Error::new(ErrorKind::Other, format!("{:?}", e))),
+    fn arity(&self) -> usize {
+        match &self.declaration {
+            Stmt::Function { params, .. } => params.len(),
+            _ => fn_initialization_panic(),
         }
     }
 }

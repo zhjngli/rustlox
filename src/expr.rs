@@ -22,6 +22,11 @@ pub enum Expr {
         op: Token,
         right: Box<Expr>,
     },
+    Call {
+        callee: Box<Expr>,
+        paren: Token,
+        args: Vec<Expr>,
+    },
     Variable {
         name: Token,
     },
