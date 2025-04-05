@@ -189,7 +189,7 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 params: _,
                 body: _,
             } => {
-                let function = Function::new(stmt.clone());
+                let function = Function::new(stmt.clone(), Rc::clone(&self.environment));
                 self.environment.borrow_mut().define(
                     name.lexeme.clone(),
                     CallableVal(Callable::Function(function)),
@@ -239,7 +239,7 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 Ok(())
             }
             Stmt::Block { stmts } => {
-                self.execute_block(stmts, Environment::enclosed(self.environment.clone()))
+                self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
             }
         }
     }

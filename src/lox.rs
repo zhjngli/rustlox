@@ -1,4 +1,8 @@
-use std::fmt::{Debug, Display, Formatter, Result as FmtResult};
+use std::{
+    cell::RefCell,
+    fmt::{Debug, Display, Formatter, Result as FmtResult},
+    rc::Rc,
+};
 
 use enum_dispatch::enum_dispatch;
 
@@ -90,6 +94,7 @@ impl LoxCallable for NativeFunction {
 #[derive(Debug, Clone)]
 pub struct Function {
     declaration: Stmt,
+    closure: Rc<RefCell<Environment>>,
 }
 
 fn fn_initialization_panic<T>() -> T {
@@ -97,9 +102,12 @@ fn fn_initialization_panic<T>() -> T {
 }
 
 impl Function {
-    pub fn new(declaration: Stmt) -> Self {
+    pub fn new(declaration: Stmt, closure: Rc<RefCell<Environment>>) -> Self {
         match &declaration {
-            Stmt::Function { .. } => Function { declaration },
+            Stmt::Function { .. } => Function {
+                declaration,
+                closure,
+            },
             _ => fn_initialization_panic(),
         }
     }
@@ -116,13 +124,13 @@ impl Display for Function {
 
 impl LoxCallable for Function {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
-        let mut environment = Environment::enclosed(interpreter.globals.clone());
         match &self.declaration {
             Stmt::Function {
                 name: _,
                 params,
                 body,
             } => {
+                let mut environment = Environment::enclosed(Rc::clone(&self.closure));
                 params.iter().enumerate().for_each(|(i, param)| {
                     environment.define(param.lexeme.clone(), args.get(i).unwrap().clone());
                 });
