@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     environment::Environment,
-    expr::{Expr, Visitor as EVisitor},
+    expr::{Expr, ExprKind as E, Visitor as EVisitor},
     lox::{
         Callable, Exits, Function, LoxCallable,
         LoxValue::{self, Bool, CallableVal, Null, Number, String},
@@ -24,14 +24,14 @@ pub struct Interpreter {
 
 impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
-        match expr {
-            Expr::Literal { value } => match value {
+        match expr.kind() {
+            E::Literal { value } => match value {
                 TokenLiteral::NumberLit(n) => Ok(Number(*n)),
                 TokenLiteral::Bool(b) => Ok(Bool(*b)),
                 TokenLiteral::StringLit(s) => Ok(String(s.to_owned())),
                 TokenLiteral::Null => Ok(Null),
             },
-            Expr::Logical { left, op, right } => {
+            E::Logical { left, op, right } => {
                 let left = self.evaluate(left)?;
                 match op.token_type {
                     TokenType::Or => {
@@ -47,8 +47,8 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                 }
                 self.evaluate(right)
             }
-            Expr::Grouping { expr } => self.evaluate(expr),
-            Expr::Unary { op, expr } => {
+            E::Grouping { expr } => self.evaluate(expr),
+            E::Unary { op, expr } => {
                 let right = self.evaluate(expr)?;
                 match op.token_type {
                     TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
@@ -62,7 +62,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            Expr::Binary { left, op, right } => {
+            E::Binary { left, op, right } => {
                 let left_val = self.evaluate(left)?;
                 let right_val = self.evaluate(right)?;
                 match op.token_type {
@@ -134,7 +134,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            Expr::Call {
+            E::Call {
                 callee,
                 paren,
                 args,
@@ -165,8 +165,8 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     )),
                 }
             }
-            Expr::Variable { name } => self.environment.borrow().get(name.clone()),
-            Expr::Assign { name, value } => {
+            E::Variable { name } => self.environment.borrow().get(name.clone()),
+            E::Assign { name, value } => {
                 let val = self.evaluate(value)?;
                 self.environment
                     .borrow_mut()

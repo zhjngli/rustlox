@@ -1,13 +1,15 @@
 use crate::{
-    expr::Expr,
+    expr::{Expr, ExprKind as E},
     stmt::Stmt,
-    token::TokenType::{
-        And, Bang, BangEqual, Class, Comma, Else, Eof, Equal, EqualEqual, False, For, Fun, Greater,
-        GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual, Minus, Nil, Number,
-        Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash, Star, String as TString,
-        True, Var, While,
+    token::{
+        Token, TokenLiteral,
+        TokenType::{
+            self, And, Bang, BangEqual, Class, Comma, Else, Eof, Equal, EqualEqual, False, For,
+            Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
+            Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
+            Star, String as TString, True, Var, While,
+        },
     },
-    token::{Token, TokenLiteral, TokenType},
 };
 
 #[derive(Debug, Clone)]
@@ -99,9 +101,9 @@ impl<'a> Parser<'a> {
         let condition = if !self.check(&Semicolon) {
             self.expression()?
         } else {
-            Expr::Literal {
+            Expr::new(E::Literal {
                 value: TokenLiteral::Bool(true),
-            }
+            })
         };
         self.consume(&Semicolon, "Expect ';' after loop condition.".to_owned())?;
 
@@ -241,12 +243,12 @@ impl<'a> Parser<'a> {
             let equals = self.previous().clone();
             let value = self.assignment()?;
 
-            match expr {
-                Expr::Variable { name } => {
-                    return Ok(Expr::Assign {
-                        name,
+            match expr.kind() {
+                E::Variable { name } => {
+                    return Ok(Expr::new(E::Assign {
+                        name: name.clone(),
                         value: Box::new(value),
-                    })
+                    }))
                 }
                 _ => {
                     self.error(&equals, "Invalid assignment target.".to_owned());
@@ -261,11 +263,11 @@ impl<'a> Parser<'a> {
         while self.match_next(&[Or]) {
             let op = self.previous().clone();
             let right = self.and()?;
-            expr = Expr::Logical {
+            expr = Expr::new(E::Logical {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-            };
+            });
         }
         Ok(expr)
     }
@@ -275,11 +277,11 @@ impl<'a> Parser<'a> {
         while self.match_next(&[And]) {
             let op = self.previous().clone();
             let right = self.equality()?;
-            expr = Expr::Logical {
+            expr = Expr::new(E::Logical {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
-            };
+            });
         }
         Ok(expr)
     }
@@ -308,11 +310,11 @@ impl<'a> Parser<'a> {
         while self.match_next(token_types) {
             let op = self.previous().clone();
             let right = parse_fn(self)?;
-            expr = Expr::Binary {
+            expr = Expr::new(E::Binary {
                 left: Box::new(expr),
                 op: op,
                 right: Box::new(right),
-            }
+            });
         }
         Ok(expr)
     }
@@ -321,10 +323,10 @@ impl<'a> Parser<'a> {
         if self.match_next(&[Bang, Minus]) {
             let op = self.previous().clone();
             let right = self.unary()?;
-            return Ok(Expr::Unary {
+            return Ok(Expr::new(E::Unary {
                 op: op,
                 expr: Box::new(right),
-            });
+            }));
         }
         return self.call();
     }
@@ -360,40 +362,40 @@ impl<'a> Parser<'a> {
             .consume(&RightParen, "Expect ')' after arguments.".to_owned())?
             .clone();
 
-        Ok(Expr::Call {
+        Ok(Expr::new(E::Call {
             callee: Box::new(callee),
             paren,
             args,
-        })
+        }))
     }
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_next(&[True]) {
-            return Ok(Expr::Literal {
+            return Ok(Expr::new(E::Literal {
                 value: TokenLiteral::Bool(true),
-            });
+            }));
         } else if self.match_next(&[False]) {
-            return Ok(Expr::Literal {
+            return Ok(Expr::new(E::Literal {
                 value: TokenLiteral::Bool(false),
-            });
+            }));
         } else if self.match_next(&[Nil]) {
-            return Ok(Expr::Literal {
+            return Ok(Expr::new(E::Literal {
                 value: TokenLiteral::Null,
-            });
+            }));
         } else if self.match_next(&[Number, TString]) {
-            return Ok(Expr::Literal {
+            return Ok(Expr::new(E::Literal {
                 value: self.previous().literal.clone(),
-            });
+            }));
         } else if self.match_next(&[Identifier]) {
-            return Ok(Expr::Variable {
+            return Ok(Expr::new(E::Variable {
                 name: self.previous().clone(),
-            });
+            }));
         } else if self.match_next(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(&RightParen, "Expect ')' after expression.".to_string())?;
-            return Ok(Expr::Grouping {
+            return Ok(Expr::new(E::Grouping {
                 expr: Box::new(expr),
-            });
+            }));
         }
 
         Err(self.error(self.peek(), "Expect expression.".to_string()))
