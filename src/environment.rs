@@ -29,18 +29,15 @@ impl Environment {
     pub fn ancestor(
         mut env: Rc<RefCell<Environment>>,
         distance: usize,
-    ) -> Result<Rc<RefCell<Environment>>, usize> {
+    ) -> Rc<RefCell<Environment>> {
         for i in 0..distance {
-            let next = {
-                let borrowed = env.borrow();
-                borrowed.enclosing.clone()
-            };
-            match next {
+            let enclosing = env.borrow().enclosing.clone();
+            match enclosing {
                 Some(e) => env = e,
-                None => return Err(i),
+                None => panic!("Couldn't find ancestor at distance {} of {}.", i, distance),
             }
         }
-        Ok(env)
+        env
     }
 
     pub fn define(&mut self, name: String, value: LoxValue) {

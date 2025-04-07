@@ -171,14 +171,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
             E::Assign { name, value } => {
                 let val = self.evaluate(value)?;
                 match self.locals.get(expr) {
-                    Some(distance) => {
-                        match Environment::ancestor(Rc::clone(&self.environment), *distance) {
-                            Ok(e) => e.borrow_mut().assign(name, &val)?,
-                            Err(i) => {
-                                panic!("Couldn't find ancestor at distance {} of {}.", i, distance)
-                            }
-                        }
-                    }
+                    Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance).borrow_mut().assign(name, &val)?,
                     None => self.globals.borrow_mut().assign(name, &val)?,
                 }
                 Ok(val)
@@ -305,15 +298,7 @@ impl Interpreter {
 
     fn lookup_var(&self, name: &Token, expr: &Expr) -> Result<LoxValue, Exits> {
         match self.locals.get(expr) {
-            Some(distance) => {
-                match Environment::ancestor(Rc::clone(&self.environment), *distance) {
-                    Ok(e) => e.borrow().get(name),
-                    Err(i) => panic!(
-                        "Couldn't find ancestor for {} at distance {} of {}.",
-                        name, i, distance
-                    ),
-                }
-            }
+            Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance).borrow().get(name),
             None => self.globals.borrow().get(name),
         }
     }
