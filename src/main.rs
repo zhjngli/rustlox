@@ -4,6 +4,7 @@ pub mod expr;
 pub mod interpreter;
 pub mod lox;
 pub mod parser;
+pub mod resolver;
 pub mod scanner;
 pub mod stmt;
 pub mod token;
@@ -15,6 +16,7 @@ use std::{
 
 use interpreter::Interpreter;
 use parser::Parser;
+use resolver::Resolver;
 use scanner::Scanner;
 
 fn main() -> Result<(), Error> {
@@ -84,6 +86,12 @@ impl Lox {
         });
 
         let mut interpreter = Interpreter::new();
+        let mut resolver = Resolver::new(&mut interpreter);
+        match resolver.resolve(&stmts) {
+            Ok(()) => (),
+            Err(e) => return Err(Error::new(ErrorKind::Other, format!("{:?}", e))),
+        };
+
         match interpreter.interpret(&stmts) {
             Ok(()) => Ok(()),
             Err(e) => Err(Error::new(ErrorKind::Other, format!("{:?}", e))),

@@ -125,7 +125,7 @@ impl<'a> Scanner<'a> {
                     if Scanner::is_alpha(c) {
                         Some(self.identifier(c))
                     } else {
-                        lex_error(self.line, format!("Unexpected character: {}", c));
+                        lex_error(self.line, &format!("Unexpected character: {}", c));
                         None
                     }
                 }
@@ -151,7 +151,7 @@ impl<'a> Scanner<'a> {
         }
         if self.source.peek() == None {
             // at end of source
-            lex_error(self.line, "Unterminated string".to_owned())
+            lex_error(self.line, "Unterminated string")
         }
         // the closing '"' char
         self.source.next();

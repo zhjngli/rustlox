@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -13,13 +14,14 @@ use crate::{
         NativeFunction,
     },
     stmt::{Stmt, Visitor as SVisitor},
-    token::{TokenLiteral, TokenType},
+    token::{Token, TokenLiteral, TokenType},
 };
 
 #[derive(Debug)]
 pub struct Interpreter {
     environment: Rc<RefCell<Environment>>,
     pub globals: Rc<RefCell<Environment>>,
+    locals: HashMap<Expr, usize>,
 }
 
 impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
@@ -165,12 +167,20 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     )),
                 }
             }
-            E::Variable { name } => self.environment.borrow().get(name.clone()),
+            E::Variable { name } => self.lookup_var(name, expr),
             E::Assign { name, value } => {
                 let val = self.evaluate(value)?;
-                self.environment
-                    .borrow_mut()
-                    .assign(name.clone(), val.clone())?;
+                match self.locals.get(expr) {
+                    Some(distance) => {
+                        match Environment::ancestor(Rc::clone(&self.environment), *distance) {
+                            Ok(e) => e.borrow_mut().assign(name, &val)?,
+                            Err(i) => {
+                                panic!("Couldn't find ancestor at distance {} of {}.", i, distance)
+                            }
+                        }
+                    }
+                    None => self.globals.borrow_mut().assign(name, &val)?,
+                }
                 Ok(val)
             }
         }
@@ -266,6 +276,7 @@ impl Interpreter {
         Interpreter {
             environment: globals.clone(),
             globals: globals,
+            locals: HashMap::new(),
         }
     }
 
@@ -280,12 +291,31 @@ impl Interpreter {
         stmt.accept(self)
     }
 
+    pub fn resolve(&mut self, expr: Expr, depth: usize) {
+        self.locals.insert(expr, depth);
+    }
+
     pub fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), Exits> {
         let previous = Rc::clone(&self.environment);
         self.environment = Rc::new(RefCell::new(env));
         let result = stmts.iter().try_for_each(|s| self.execute(s));
         self.environment = previous;
         result
+    }
+
+    fn lookup_var(&self, name: &Token, expr: &Expr) -> Result<LoxValue, Exits> {
+        match self.locals.get(expr) {
+            Some(distance) => {
+                match Environment::ancestor(Rc::clone(&self.environment), *distance) {
+                    Ok(e) => e.borrow().get(name),
+                    Err(i) => panic!(
+                        "Couldn't find ancestor for {} at distance {} of {}.",
+                        name, i, distance
+                    ),
+                }
+            }
+            None => self.globals.borrow().get(name),
+        }
     }
 
     fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {

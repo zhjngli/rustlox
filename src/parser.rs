@@ -21,6 +21,11 @@ pub struct Parser<'a> {
 #[derive(Debug)]
 pub struct ParseError;
 
+pub fn parse_error(token: &Token, message: &str) -> ParseError {
+    crate::errors::token_error(token, message);
+    ParseError {}
+}
+
 impl<'a> Parser<'a> {
     pub fn new(tokens: &'a Vec<Token>) -> Self {
         Parser { tokens, current: 0 }
@@ -88,7 +93,7 @@ impl<'a> Parser<'a> {
     }
 
     fn for_statement(&mut self) -> Result<Stmt, ParseError> {
-        self.consume(&LeftParen, "Expect '(' after 'for'.".to_owned())?;
+        self.consume(&LeftParen, "Expect '(' after 'for'.")?;
 
         let initializer = if self.match_next(&[Semicolon]) {
             None
@@ -105,14 +110,14 @@ impl<'a> Parser<'a> {
                 value: TokenLiteral::Bool(true),
             })
         };
-        self.consume(&Semicolon, "Expect ';' after loop condition.".to_owned())?;
+        self.consume(&Semicolon, "Expect ';' after loop condition.")?;
 
         let increment = if !self.check(&RightParen) {
             Some(self.expression()?)
         } else {
             None
         };
-        self.consume(&RightParen, "Expect ')' after for clauses.".to_owned())?;
+        self.consume(&RightParen, "Expect ')' after for clauses.")?;
 
         let mut body = self.statement()?;
         if let Some(inc) = increment {
@@ -134,9 +139,9 @@ impl<'a> Parser<'a> {
     }
 
     fn if_statement(&mut self) -> Result<Stmt, ParseError> {
-        self.consume(&LeftParen, "Expect '(' after 'if'.".to_owned())?;
+        self.consume(&LeftParen, "Expect '(' after 'if'.")?;
         let condition = self.expression()?;
-        self.consume(&RightParen, "Expect ')' after if condition.".to_owned())?;
+        self.consume(&RightParen, "Expect ')' after if condition.")?;
 
         let then_branch = Box::new(self.statement()?);
         let mut else_branch = None;
@@ -152,7 +157,7 @@ impl<'a> Parser<'a> {
 
     fn print_statement(&mut self) -> Result<Stmt, ParseError> {
         let value = self.expression()?;
-        self.consume(&Semicolon, "Expect ';' after value.".to_owned())?;
+        self.consume(&Semicolon, "Expect ';' after value.")?;
         Ok(Stmt::Print { expr: value })
     }
 
@@ -163,30 +168,25 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        self.consume(&Semicolon, "Expect ';' after return value.".to_owned())?;
+        self.consume(&Semicolon, "Expect ';' after return value.")?;
         Ok(Stmt::Return { keyword, value })
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
-        let name = self
-            .consume(&Identifier, "Expect variable name.".to_owned())?
-            .clone();
+        let name = self.consume(&Identifier, "Expect variable name.")?.clone();
         let initializer = if self.match_next(&[Equal]) {
             Some(self.expression()?.clone())
         } else {
             None
         };
-        self.consume(
-            &Semicolon,
-            "Expect ';' after variable declaration.".to_owned(),
-        )?;
+        self.consume(&Semicolon, "Expect ';' after variable declaration.")?;
         Ok(Stmt::Var { name, initializer })
     }
 
     fn while_statement(&mut self) -> Result<Stmt, ParseError> {
-        self.consume(&LeftParen, "Expect '(' after 'while'.".to_owned())?;
+        self.consume(&LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
-        self.consume(&RightParen, "Expect ')' after condition.".to_owned())?;
+        self.consume(&RightParen, "Expect ')' after condition")?;
         let body = Box::new(self.statement()?);
 
         Ok(Stmt::While { condition, body })
@@ -194,26 +194,26 @@ impl<'a> Parser<'a> {
 
     fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
         let expr = self.expression()?;
-        self.consume(&Semicolon, "Expect ';' after expression.".to_owned())?;
+        self.consume(&Semicolon, "Expect ';' after expression.")?;
         Ok(Stmt::Expr { expr: expr })
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
         let name = self
-            .consume(&Identifier, format!("Expect {} name.", kind))?
+            .consume(&Identifier, &format!("Expect {} name.", kind))?
             .clone();
 
-        self.consume(&LeftParen, format!("Expect '(' after {} name.", kind))?;
+        self.consume(&LeftParen, &format!("Expect '(' after {} name.", kind))?;
         let mut params = Vec::new();
         if !self.check(&RightParen) {
             loop {
                 if params.len() >= 255 {
-                    return Err(self.error(
+                    return Err(parse_error(
                         self.peek(),
-                        "Can't have more than 255 parameters.".to_owned(),
+                        "Can't have more than 255 parameters.",
                     ));
                 }
-                let param = self.consume(&Identifier, "Expect parameter name.".to_owned())?;
+                let param = self.consume(&Identifier, "Expect parameter name.")?;
                 params.push(param.clone());
 
                 if !self.match_next(&[Comma]) {
@@ -221,9 +221,9 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        self.consume(&RightParen, "Expect ')' after parameters".to_owned())?;
+        self.consume(&RightParen, "Expect ')' after parameters")?;
 
-        self.consume(&LeftBrace, format!("Expect '{{' before {} body.", kind))?;
+        self.consume(&LeftBrace, &format!("Expect '{{' before {} body.", kind))?;
         let body = self.block()?;
         Ok(Stmt::Function { name, params, body })
     }
@@ -233,7 +233,7 @@ impl<'a> Parser<'a> {
         while !self.check(&RightBrace) && !self.is_at_end() {
             stmts.push(self.declaration()?);
         }
-        self.consume(&RightBrace, "Expect '}' after block.".to_owned())?;
+        self.consume(&RightBrace, "Expect '}' after block.")?;
         Ok(stmts)
     }
 
@@ -251,7 +251,7 @@ impl<'a> Parser<'a> {
                     }))
                 }
                 _ => {
-                    self.error(&equals, "Invalid assignment target.".to_owned());
+                    parse_error(&equals, "Invalid assignment target.");
                 }
             }
         }
@@ -349,17 +349,14 @@ impl<'a> Parser<'a> {
             args.push(self.expression()?);
             while self.match_next(&[Comma]) {
                 if args.len() >= 255 {
-                    self.error(
-                        self.peek(),
-                        "Can't have more than 255 arguments.".to_owned(),
-                    );
+                    parse_error(self.peek(), "Can't have more than 255 arguments.");
                 }
                 args.push(self.expression()?);
             }
         }
 
         let paren = self
-            .consume(&RightParen, "Expect ')' after arguments.".to_owned())?
+            .consume(&RightParen, "Expect ')' after arguments.")?
             .clone();
 
         Ok(Expr::new(E::Call {
@@ -392,13 +389,13 @@ impl<'a> Parser<'a> {
             }));
         } else if self.match_next(&[LeftParen]) {
             let expr = self.expression()?;
-            self.consume(&RightParen, "Expect ')' after expression.".to_string())?;
+            self.consume(&RightParen, "Expect ')' after expression.")?;
             return Ok(Expr::new(E::Grouping {
                 expr: Box::new(expr),
             }));
         }
 
-        Err(self.error(self.peek(), "Expect expression.".to_string()))
+        Err(parse_error(self.peek(), "Expect expression."))
     }
 
     fn match_next(&mut self, token_types: &[TokenType]) -> bool {
@@ -411,11 +408,11 @@ impl<'a> Parser<'a> {
         return false;
     }
 
-    fn consume(&mut self, token_type: &TokenType, message: String) -> Result<&Token, ParseError> {
+    fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&Token, ParseError> {
         if self.check(token_type) {
             Ok(self.advance())
         } else {
-            Err(self.error(self.peek(), message))
+            Err(parse_error(self.peek(), message))
         }
     }
 
@@ -443,11 +440,6 @@ impl<'a> Parser<'a> {
 
     fn previous(&self) -> &Token {
         &self.tokens[self.current - 1]
-    }
-
-    fn error(&self, token: &Token, message: String) -> ParseError {
-        crate::errors::token_error(token, message);
-        ParseError {}
     }
 
     fn synchronize(&mut self) {
