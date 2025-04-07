@@ -22,7 +22,7 @@ pub struct Parser<'a> {
 pub struct ParseError;
 
 pub fn parse_error(token: &Token, message: &str) -> ParseError {
-    crate::errors::token_error(token, message);
+    crate::errors::report_token_error(token, message);
     ParseError {}
 }
 

@@ -2,7 +2,7 @@ use once_cell::sync::Lazy;
 use std::{collections::HashMap, iter::Peekable, str::Chars};
 
 use crate::{
-    errors::lex_error,
+    errors::report_lex_error,
     token::TokenLiteral::{Null, NumberLit, StringLit},
     token::TokenType::{
         And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False, For, Fun,
@@ -125,7 +125,7 @@ impl<'a> Scanner<'a> {
                     if Scanner::is_alpha(c) {
                         Some(self.identifier(c))
                     } else {
-                        lex_error(self.line, &format!("Unexpected character: {}", c));
+                        report_lex_error(self.line, &format!("Unexpected character: {}", c));
                         None
                     }
                 }
@@ -151,7 +151,7 @@ impl<'a> Scanner<'a> {
         }
         if self.source.peek() == None {
             // at end of source
-            lex_error(self.line, "Unterminated string")
+            report_lex_error(self.line, "Unterminated string")
         }
         // the closing '"' char
         self.source.next();
