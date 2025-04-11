@@ -1,5 +1,6 @@
 use std::{
     cell::RefCell,
+    collections::HashMap,
     fmt::{Debug, Display, Formatter, Result as FmtResult},
     rc::Rc,
 };
@@ -14,6 +15,7 @@ pub enum LoxValue {
     Number(f64),
     String(String),
     CallableVal(Callable),
+    ClassInstance(Rc<RefCell<Instance>>),
     Null,
 }
 
@@ -24,6 +26,7 @@ impl Display for LoxValue {
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
             Self::CallableVal(c) => write!(f, "{:?}", c),
+            Self::ClassInstance(i) => write!(f, "{}", i.borrow()),
             Self::Null => write!(f, "null"),
         }
     }
@@ -48,6 +51,7 @@ pub trait LoxCallable {
 pub enum Callable {
     NativeFunction,
     Function,
+    Class,
 }
 
 pub struct NativeFunction {
@@ -151,5 +155,67 @@ impl LoxCallable for Function {
             Stmt::Function { params, .. } => params.len(),
             _ => fn_initialization_panic(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Class {
+    name: String,
+}
+
+impl Class {
+    pub fn new(name: String) -> Self {
+        Class { name }
+    }
+}
+
+impl Display for Class {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "<class {}>", self.name)
+    }
+}
+
+impl LoxCallable for Class {
+    fn call(&self, _interpreter: &mut Interpreter, _args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+        Ok(LoxValue::ClassInstance(Rc::new(RefCell::new(Instance::new(self.clone())))))
+    }
+
+    fn arity(&self) -> usize {
+        0
+    }
+}
+
+#[derive(Debug)]
+pub struct Instance {
+    class: Class,
+    fields: HashMap<String, LoxValue>,
+}
+
+impl Instance {
+    pub fn new(class: Class) -> Self {
+        Instance {
+            class,
+            fields: HashMap::new(),
+        }
+    }
+
+    pub fn get(&self, name: &Token) -> Result<LoxValue, Exits> {
+        match self.fields.get(&name.lexeme) {
+            Some(v) => Ok(v.clone()),
+            None => Err(Exits::RuntimeError(
+                name.clone(),
+                format!("Undefined property '{}'.", name.lexeme),
+            )),
+        }
+    }
+
+    pub fn set(&mut self, name: &Token, value: &LoxValue) {
+        self.fields.insert(name.lexeme.clone(), value.clone());
+    }
+}
+
+impl Display for Instance {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "<instance {}>", self.class.name)
     }
 }

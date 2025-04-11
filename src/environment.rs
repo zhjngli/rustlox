@@ -78,7 +78,7 @@ impl Environment {
         ))
     }
 
-    // get_at and assign_at can also be used in place of ancestor. I find using ancestor slightly less clunky due to the potentially unsafe unwrap() call
+    // get_at and assign_at can also be used in place of ancestor. I find using ancestor slightly less clunky because it avoids the potentially unsafe unwrap() call
     // pub fn get_at(&self, distance: usize, name: &Token) -> Result<LoxValue, Exits> {
     //     if distance == 0 {
     //         self.get(name)

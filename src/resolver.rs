@@ -133,11 +133,21 @@ impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
                 args.iter().try_for_each(|a| self.resolve_expression(a))?;
                 Ok(())
             }
+            E::Get { object, name: _ } => self.resolve_expression(object),
             E::Grouping { expr } => self.resolve_expression(expr),
             E::Literal { value: _ } => Ok(()),
             E::Logical { left, op: _, right } => {
                 self.resolve_expression(left)?;
                 self.resolve_expression(right)?;
+                Ok(())
+            }
+            E::Set {
+                object,
+                name: _,
+                value,
+            } => {
+                self.resolve_expression(value)?;
+                self.resolve_expression(object)?;
                 Ok(())
             }
             E::Unary { op: _, expr } => self.resolve_expression(expr),
@@ -164,6 +174,11 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                 self.begin_scope();
                 self.resolve(stmts)?;
                 self.end_scope();
+                Ok(())
+            }
+            Stmt::Class { name, methods: _ } => {
+                self.declare(name)?;
+                self.define(name);
                 Ok(())
             }
             Stmt::Expr { expr } => self.resolve_expression(expr),

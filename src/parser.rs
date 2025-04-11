@@ -4,8 +4,8 @@ use crate::{
     token::{
         Token, TokenLiteral,
         TokenType::{
-            self, And, Bang, BangEqual, Class, Comma, Else, Eof, Equal, EqualEqual, False, For,
-            Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
+            self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
+            For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
             Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
             Star, String as TString, True, Var, While,
         },
@@ -52,7 +52,9 @@ impl<'a> Parser<'a> {
     }
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
-        let stmt_result = if self.match_next(&[Fun]) {
+        let stmt_result = if self.match_next(&[Class]) {
+            self.class_declaration()
+        } else if self.match_next(&[Fun]) {
             self.function("function")
         } else if self.match_next(&[Var]) {
             self.var_declaration()
@@ -66,6 +68,20 @@ impl<'a> Parser<'a> {
                 Err(ParseError {})
             }
         }
+    }
+
+    fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
+        let name = self.consume(&Identifier, "Expect class name.")?.clone();
+        self.consume(&LeftBrace, "Expect '{' before class body.")?;
+
+        let mut methods = Vec::new();
+        while !self.check(&RightBrace) && !self.is_at_end() {
+            methods.push(self.function("method")?);
+        }
+
+        self.consume(&RightBrace, "Expect '}' after class body.")?;
+
+        Ok(Stmt::Class { name, methods })
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
@@ -250,6 +266,13 @@ impl<'a> Parser<'a> {
                         value: Box::new(value),
                     }))
                 }
+                E::Get { object, name } => {
+                    return Ok(Expr::new(E::Set {
+                        object: object.clone(),
+                        name: name.clone(),
+                        value: Box::new(value),
+                    }))
+                }
                 _ => {
                     parse_error(&equals, "Invalid assignment target.");
                 }
@@ -336,6 +359,14 @@ impl<'a> Parser<'a> {
         loop {
             if self.match_next(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.match_next(&[Dot]) {
+                let name = self
+                    .consume(&Identifier, "Expect property name after '.'.")?
+                    .clone();
+                expr = Expr::new(E::Get {
+                    object: Box::new(expr),
+                    name,
+                });
             } else {
                 break;
             }

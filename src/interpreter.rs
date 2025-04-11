@@ -9,8 +9,8 @@ use crate::{
     environment::Environment,
     expr::{Expr, ExprKind as E, Visitor as EVisitor},
     lox::{
-        Callable, Exits, Function, LoxCallable,
-        LoxValue::{self, Bool, CallableVal, Null, Number, String},
+        Callable, Class, Exits, Function, LoxCallable,
+        LoxValue::{self, Bool, CallableVal, ClassInstance, Null, Number, String},
         NativeFunction,
     },
     stmt::{Stmt, Visitor as SVisitor},
@@ -27,42 +27,17 @@ pub struct Interpreter {
 impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
         match expr.kind() {
-            E::Literal { value } => match value {
-                TokenLiteral::NumberLit(n) => Ok(Number(*n)),
-                TokenLiteral::Bool(b) => Ok(Bool(*b)),
-                TokenLiteral::StringLit(s) => Ok(String(s.to_owned())),
-                TokenLiteral::Null => Ok(Null),
-            },
-            E::Logical { left, op, right } => {
-                let left = self.evaluate(left)?;
-                match op.token_type {
-                    TokenType::Or => {
-                        if self.is_truthy(&left) {
-                            return Ok(left);
-                        }
+            E::Assign { name, value } => {
+                let val = self.evaluate(value)?;
+                match self.locals.get(expr) {
+                    Some(distance) => {
+                        Environment::ancestor(Rc::clone(&self.environment), *distance)
+                            .borrow_mut()
+                            .assign(name, &val)?
                     }
-                    _ => {
-                        if !self.is_truthy(&left) {
-                            return Ok(left);
-                        }
-                    }
+                    None => self.globals.borrow_mut().assign(name, &val)?,
                 }
-                self.evaluate(right)
-            }
-            E::Grouping { expr } => self.evaluate(expr),
-            E::Unary { op, expr } => {
-                let right = self.evaluate(expr)?;
-                match op.token_type {
-                    TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
-                    TokenType::Minus => match right {
-                        Number(r) => return Ok(Number(-r)),
-                        _ => Err(Exits::RuntimeError(
-                            op.clone(),
-                            format!("Operand of ({:?}) must be a number.", op).to_owned(),
-                        )),
-                    },
-                    _ => Ok(Null),
-                }
+                Ok(val)
             }
             E::Binary { left, op, right } => {
                 let left_val = self.evaluate(left)?;
@@ -167,15 +142,72 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     )),
                 }
             }
-            E::Variable { name } => self.lookup_var(name, expr),
-            E::Assign { name, value } => {
-                let val = self.evaluate(value)?;
-                match self.locals.get(expr) {
-                    Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance).borrow_mut().assign(name, &val)?,
-                    None => self.globals.borrow_mut().assign(name, &val)?,
+            E::Get { object, name } => {
+                let object = self.evaluate(object)?;
+                match object {
+                    ClassInstance(i) => i.borrow().get(name),
+                    _ => Err(Exits::RuntimeError(
+                        name.clone(),
+                        "Only instances have properties.".to_owned(),
+                    )),
                 }
-                Ok(val)
             }
+            E::Grouping { expr } => self.evaluate(expr),
+            E::Literal { value } => match value {
+                TokenLiteral::NumberLit(n) => Ok(Number(*n)),
+                TokenLiteral::Bool(b) => Ok(Bool(*b)),
+                TokenLiteral::StringLit(s) => Ok(String(s.to_owned())),
+                TokenLiteral::Null => Ok(Null),
+            },
+            E::Logical { left, op, right } => {
+                let left = self.evaluate(left)?;
+                match op.token_type {
+                    TokenType::Or => {
+                        if self.is_truthy(&left) {
+                            return Ok(left);
+                        }
+                    }
+                    _ => {
+                        if !self.is_truthy(&left) {
+                            return Ok(left);
+                        }
+                    }
+                }
+                self.evaluate(right)
+            }
+            E::Set {
+                object,
+                name,
+                value,
+            } => {
+                let instance = self.evaluate(object)?;
+                match instance {
+                    ClassInstance(i) => {
+                        let value = self.evaluate(value)?;
+                        i.borrow_mut().set(name, &value);
+                        Ok(value)
+                    }
+                    _ => Err(Exits::RuntimeError(
+                        name.clone(),
+                        "Only instances have fields.".to_owned(),
+                    )),
+                }
+            }
+            E::Unary { op, expr } => {
+                let right = self.evaluate(expr)?;
+                match op.token_type {
+                    TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
+                    TokenType::Minus => match right {
+                        Number(r) => return Ok(Number(-r)),
+                        _ => Err(Exits::RuntimeError(
+                            op.clone(),
+                            format!("Operand of ({:?}) must be a number.", op).to_owned(),
+                        )),
+                    },
+                    _ => Ok(Null),
+                }
+            }
+            E::Variable { name } => self.lookup_var(name, expr),
         }
     }
 }
@@ -183,6 +215,19 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
 impl SVisitor<Result<(), Exits>> for Interpreter {
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), Exits> {
         match stmt {
+            Stmt::Block { stmts } => {
+                self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
+            }
+            Stmt::Class { name, methods: _ } => {
+                self.environment
+                    .borrow_mut()
+                    .define(name.lexeme.clone(), Null);
+                let class = Class::new(name.lexeme.clone());
+                self.environment
+                    .borrow_mut()
+                    .assign(name, &CallableVal(Callable::Class(class)))?;
+                Ok(())
+            }
             Stmt::Expr { expr } => {
                 self.evaluate(expr)?;
                 Ok(())
@@ -241,9 +286,6 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 }
                 Ok(())
             }
-            Stmt::Block { stmts } => {
-                self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
-            }
         }
     }
 }
@@ -298,7 +340,9 @@ impl Interpreter {
 
     fn lookup_var(&self, name: &Token, expr: &Expr) -> Result<LoxValue, Exits> {
         match self.locals.get(expr) {
-            Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance).borrow().get(name),
+            Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance)
+                .borrow()
+                .get(name),
             None => self.globals.borrow().get(name),
         }
     }

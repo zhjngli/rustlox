@@ -2,6 +2,13 @@ use crate::{expr::Expr, token::Token};
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
+    Block {
+        stmts: Vec<Stmt>,
+    },
+    Class {
+        name: Token,
+        methods: Vec<Stmt>,
+    },
     Expr {
         expr: Expr,
     },
@@ -29,9 +36,6 @@ pub enum Stmt {
     While {
         condition: Expr,
         body: Box<Stmt>,
-    },
-    Block {
-        stmts: Vec<Stmt>,
     },
 }
 pub trait Visitor<T> {

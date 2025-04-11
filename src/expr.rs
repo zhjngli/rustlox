@@ -15,20 +15,9 @@ pub struct Expr {
 
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    Literal {
-        value: TokenLiteral,
-    },
-    Logical {
-        left: Box<Expr>,
-        op: Token,
-        right: Box<Expr>,
-    },
-    Grouping {
-        expr: Box<Expr>,
-    },
-    Unary {
-        op: Token,
-        expr: Box<Expr>,
+    Assign {
+        name: Token,
+        value: Box<Expr>,
     },
     Binary {
         left: Box<Expr>,
@@ -40,12 +29,32 @@ pub enum ExprKind {
         paren: Token,
         args: Vec<Expr>,
     },
-    Variable {
+    Get {
+        object: Box<Expr>,
         name: Token,
     },
-    Assign {
+    Grouping {
+        expr: Box<Expr>,
+    },
+    Literal {
+        value: TokenLiteral,
+    },
+    Logical {
+        left: Box<Expr>,
+        op: Token,
+        right: Box<Expr>,
+    },
+    Set {
+        object: Box<Expr>,
         name: Token,
         value: Box<Expr>,
+    },
+    Unary {
+        op: Token,
+        expr: Box<Expr>,
+    },
+    Variable {
+        name: Token,
     },
 }
 
