@@ -20,7 +20,7 @@ use resolver::Resolver;
 use scanner::Scanner;
 
 fn main() -> Result<(), Error> {
-    let mut lox = Lox::new();
+    let lox = Lox::new();
     let args: Vec<String> = env::args().collect();
     if args.len() > 2 {
         Err(Error::new(
@@ -46,7 +46,7 @@ impl Lox {
         self.run(fs::read_to_string(f)?)
     }
 
-    pub fn run_prompt(&mut self) -> Result<(), Error> {
+    pub fn run_prompt(&self) -> Result<(), Error> {
         loop {
             print!("> ");
             stdout().flush().unwrap();
