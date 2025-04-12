@@ -161,11 +161,16 @@ impl LoxCallable for Function {
 #[derive(Debug, Clone)]
 pub struct Class {
     name: String,
+    methods: HashMap<String, Function>,
 }
 
 impl Class {
-    pub fn new(name: String) -> Self {
-        Class { name }
+    pub fn new(name: String, methods: HashMap<String, Function>) -> Self {
+        Class { name, methods }
+    }
+
+    fn find_method(&self, name: &str) -> Option<&Function> {
+        self.methods.get(name)
     }
 }
 
@@ -176,8 +181,14 @@ impl Display for Class {
 }
 
 impl LoxCallable for Class {
-    fn call(&self, _interpreter: &mut Interpreter, _args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
-        Ok(LoxValue::ClassInstance(Rc::new(RefCell::new(Instance::new(self.clone())))))
+    fn call(
+        &self,
+        _interpreter: &mut Interpreter,
+        _args: Vec<LoxValue>,
+    ) -> Result<LoxValue, Exits> {
+        Ok(LoxValue::ClassInstance(Rc::new(RefCell::new(
+            Instance::new(self.clone()),
+        ))))
     }
 
     fn arity(&self) -> usize {
@@ -200,13 +211,18 @@ impl Instance {
     }
 
     pub fn get(&self, name: &Token) -> Result<LoxValue, Exits> {
-        match self.fields.get(&name.lexeme) {
-            Some(v) => Ok(v.clone()),
-            None => Err(Exits::RuntimeError(
-                name.clone(),
-                format!("Undefined property '{}'.", name.lexeme),
-            )),
+        if let Some(v) = self.fields.get(&name.lexeme) {
+            return Ok(v.clone());
         }
+
+        if let Some(m) = self.class.find_method(&name.lexeme) {
+            return Ok(LoxValue::CallableVal(Callable::Function(m.clone())));
+        }
+
+        Err(Exits::RuntimeError(
+            name.clone(),
+            format!("Undefined property '{}'.", name.lexeme),
+        ))
     }
 
     pub fn set(&mut self, name: &Token, value: &LoxValue) {

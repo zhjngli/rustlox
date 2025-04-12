@@ -19,6 +19,7 @@ pub struct Resolver<'a> {
 enum FunctionType {
     None,
     Function,
+    Method,
 }
 
 impl<'a> Resolver<'a> {
@@ -176,9 +177,12 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                 self.end_scope();
                 Ok(())
             }
-            Stmt::Class { name, methods: _ } => {
+            Stmt::Class { name, methods } => {
                 self.declare(name)?;
                 self.define(name);
+                methods
+                    .iter()
+                    .try_for_each(|m| self.resolve_function(m, FunctionType::Method))?;
                 Ok(())
             }
             Stmt::Expr { expr } => self.resolve_expression(expr),

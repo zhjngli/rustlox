@@ -218,11 +218,31 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
             Stmt::Block { stmts } => {
                 self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
             }
-            Stmt::Class { name, methods: _ } => {
+            Stmt::Class { name, methods } => {
                 self.environment
                     .borrow_mut()
                     .define(name.lexeme.clone(), Null);
-                let class = Class::new(name.lexeme.clone());
+
+                let mut ms = HashMap::new();
+                methods.iter().try_for_each(|m| match m {
+                    Stmt::Function {
+                        name,
+                        params: _,
+                        body: _,
+                    } => {
+                        ms.insert(
+                            name.lexeme.clone(),
+                            Function::new(m.clone(), self.environment.clone()),
+                        );
+                        Ok(())
+                    }
+                    _ => panic!(
+                        "Method in class should be a function statement, but got: {:?}",
+                        m
+                    ),
+                })?;
+
+                let class = Class::new(name.lexeme.clone(), ms);
                 self.environment
                     .borrow_mut()
                     .assign(name, &CallableVal(Callable::Class(class)))?;
