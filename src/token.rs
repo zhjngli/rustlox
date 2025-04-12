@@ -61,6 +61,7 @@ pub enum TokenLiteral {
 
 #[derive(Debug, Clone)]
 pub struct Token {
+    // TODO: make fields private and use getters?
     pub token_type: TokenType,
     pub lexeme: String,
     pub literal: TokenLiteral,

@@ -193,6 +193,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     )),
                 }
             }
+            E::This { keyword } => self.lookup_var(keyword, expr),
             E::Unary { op, expr } => {
                 let right = self.evaluate(expr)?;
                 match op.token_type {
@@ -232,7 +233,11 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                     } => {
                         ms.insert(
                             name.lexeme.clone(),
-                            Function::new(m.clone(), self.environment.clone()),
+                            Function::new(
+                                m.clone(),
+                                self.environment.clone(),
+                                name.lexeme == "init",
+                            ),
                         );
                         Ok(())
                     }
@@ -257,7 +262,7 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 params: _,
                 body: _,
             } => {
-                let function = Function::new(stmt.clone(), Rc::clone(&self.environment));
+                let function = Function::new(stmt.clone(), Rc::clone(&self.environment), false);
                 self.environment.borrow_mut().define(
                     name.lexeme.clone(),
                     CallableVal(Callable::Function(function)),

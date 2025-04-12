@@ -1,5 +1,6 @@
 use crate::{expr::Expr, token::Token};
 
+// TODO: Stmt and StmtKind? simplifies some statement pattern matching in function resolver
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Block {

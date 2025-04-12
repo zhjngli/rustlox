@@ -49,6 +49,9 @@ pub enum ExprKind {
         name: Token,
         value: Box<Expr>,
     },
+    This {
+        keyword: Token,
+    },
     Unary {
         op: Token,
         expr: Box<Expr>,

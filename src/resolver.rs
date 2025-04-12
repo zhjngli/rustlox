@@ -13,13 +13,21 @@ pub struct Resolver<'a> {
     interpreter: &'a mut Interpreter,
     scopes: Vec<HashMap<String, bool>>,
     current_function: FunctionType,
+    current_class: ClassType,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FunctionType {
     None,
     Function,
+    Initializer,
     Method,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ClassType {
+    None,
+    Class,
 }
 
 impl<'a> Resolver<'a> {
@@ -28,6 +36,7 @@ impl<'a> Resolver<'a> {
             interpreter,
             scopes: Vec::new(),
             current_function: FunctionType::None,
+            current_class: ClassType::None,
         }
     }
 
@@ -60,7 +69,10 @@ impl<'a> Resolver<'a> {
                 self.current_function = enclosing_function;
                 Ok(())
             }
-            _ => panic!("Resolve function called on non-function statement!"),
+            _ => panic!(
+                "Resolve function called on non-function statement: {:?}",
+                function
+            ),
         }
     }
 
@@ -151,6 +163,12 @@ impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
                 self.resolve_expression(object)?;
                 Ok(())
             }
+            E::This { keyword } => match self.current_class {
+                ClassType::Class => self.resolve_local(expr, keyword),
+                ClassType::None => {
+                    Err(parse_error(keyword, "Can't use 'this' outside of a class."))
+                }
+            },
             E::Unary { op: _, expr } => self.resolve_expression(expr),
             E::Variable { name } => {
                 if let Some(scope) = self.scopes.last() {
@@ -178,11 +196,32 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                 Ok(())
             }
             Stmt::Class { name, methods } => {
+                let enclosing_class = self.current_class;
+                self.current_class = ClassType::Class;
+
                 self.declare(name)?;
                 self.define(name);
-                methods
-                    .iter()
-                    .try_for_each(|m| self.resolve_function(m, FunctionType::Method))?;
+
+                self.begin_scope();
+                if let Some(s) = self.scopes.last_mut() {
+                    s.insert("this".to_owned(), true);
+                }
+                methods.iter().try_for_each(|m| {
+                    self.resolve_function(
+                        m,
+                        if match m {
+                            Stmt::Function { name, .. } => name.lexeme == "init",
+                            _ => panic!("Class method cannot be a non-function statement: {:?}", m),
+                        } {
+                            FunctionType::Initializer
+                        } else {
+                            FunctionType::Method
+                        },
+                    )
+                })?;
+                self.end_scope();
+
+                self.current_class = enclosing_class;
                 Ok(())
             }
             Stmt::Expr { expr } => self.resolve_expression(expr),
@@ -214,8 +253,13 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                 if self.current_function == FunctionType::None {
                     return Err(parse_error(keyword, "Can't return from top-level code."));
                 }
-
                 if let Some(expr) = value {
+                    if self.current_function == FunctionType::Initializer {
+                        return Err(parse_error(
+                            keyword,
+                            "Can't return a value from an initializer.",
+                        ));
+                    }
                     self.resolve_expression(expr)?;
                 }
                 Ok(())

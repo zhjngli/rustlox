@@ -7,7 +7,12 @@ use std::{
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{environment::Environment, interpreter::Interpreter, stmt::Stmt, token::Token};
+use crate::{
+    environment::Environment,
+    interpreter::Interpreter,
+    stmt::Stmt,
+    token::{Token, TokenLiteral, TokenType},
+};
 
 #[derive(Debug, Clone)]
 pub enum LoxValue {
@@ -34,7 +39,8 @@ impl Display for LoxValue {
 
 #[derive(Debug)]
 pub enum Exits {
-    // TODO: should ParseError be here?
+    // TODO: add ParseError here?
+    // TODO: use new StaticError for Resolver
     RuntimeError(Token, String),
     Return(LoxValue),
 }
@@ -99,6 +105,7 @@ impl LoxCallable for NativeFunction {
 pub struct Function {
     declaration: Stmt,
     closure: Rc<RefCell<Environment>>,
+    is_initializer: bool,
 }
 
 fn fn_initialization_panic<T>() -> T {
@@ -106,14 +113,33 @@ fn fn_initialization_panic<T>() -> T {
 }
 
 impl Function {
-    pub fn new(declaration: Stmt, closure: Rc<RefCell<Environment>>) -> Self {
+    pub fn new(declaration: Stmt, closure: Rc<RefCell<Environment>>, is_initializer: bool) -> Self {
         match &declaration {
             Stmt::Function { .. } => Function {
                 declaration,
                 closure,
+                is_initializer,
             },
             _ => fn_initialization_panic(),
         }
+    }
+
+    fn bind(&self, instance: Rc<RefCell<Instance>>) -> Function {
+        let env = Rc::new(RefCell::new(Environment::enclosed(self.closure.clone())));
+        env.borrow_mut()
+            .define("this".to_owned(), LoxValue::ClassInstance(instance));
+        Function::new(self.declaration.clone(), env, self.is_initializer)
+    }
+
+    fn get_this(&self, name: &Token) -> Result<LoxValue, Exits> {
+        Environment::ancestor(self.closure.clone(), 0)
+            .borrow()
+            .get(&Token::new(
+                TokenType::This,
+                "this".to_owned(),
+                TokenLiteral::Null,
+                name.line,
+            ))
     }
 }
 
@@ -129,25 +155,32 @@ impl Display for Function {
 impl LoxCallable for Function {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
         match &self.declaration {
-            Stmt::Function {
-                name: _,
-                params,
-                body,
-            } => {
+            Stmt::Function { name, params, body } => {
                 let mut environment = Environment::enclosed(Rc::clone(&self.closure));
                 params.iter().enumerate().for_each(|(i, param)| {
                     environment.define(param.lexeme.clone(), args.get(i).unwrap().clone());
                 });
                 let result = interpreter.execute_block(body, environment.to_owned());
                 match result {
-                    Ok(()) => (),
-                    Err(Exits::Return(value)) => return Ok(value),
-                    Err(runtime_error) => return Err(runtime_error),
+                    Err(Exits::Return(value)) => {
+                        if self.is_initializer {
+                            self.get_this(name)
+                        } else {
+                            Ok(value)
+                        }
+                    }
+                    Ok(()) => {
+                        if self.is_initializer {
+                            self.get_this(name)
+                        } else {
+                            Ok(LoxValue::Null)
+                        }
+                    }
+                    Err(runtime_error) => Err(runtime_error),
                 }
             }
             _ => fn_initialization_panic(),
         }
-        Ok(LoxValue::Null)
     }
 
     fn arity(&self) -> usize {
@@ -181,24 +214,25 @@ impl Display for Class {
 }
 
 impl LoxCallable for Class {
-    fn call(
-        &self,
-        _interpreter: &mut Interpreter,
-        _args: Vec<LoxValue>,
-    ) -> Result<LoxValue, Exits> {
-        Ok(LoxValue::ClassInstance(Rc::new(RefCell::new(
-            Instance::new(self.clone()),
-        ))))
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+        let instance = Rc::new(RefCell::new(Instance::new(self.clone())));
+        if let Some(initializer) = self.find_method("init") {
+            initializer.bind(instance.clone()).call(interpreter, args)?;
+        }
+        Ok(LoxValue::ClassInstance(instance))
     }
 
     fn arity(&self) -> usize {
-        0
+        match self.find_method("init") {
+            Some(initializer) => initializer.arity(),
+            None => 0,
+        }
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Instance {
-    class: Class,
+    class: Class, // TODO: RC this so it's not deep-cloned every time an instance is created
     fields: HashMap<String, LoxValue>,
 }
 
@@ -212,17 +246,17 @@ impl Instance {
 
     pub fn get(&self, name: &Token) -> Result<LoxValue, Exits> {
         if let Some(v) = self.fields.get(&name.lexeme) {
-            return Ok(v.clone());
+            Ok(v.clone())
+        } else if let Some(m) = self.class.find_method(&name.lexeme) {
+            Ok(LoxValue::CallableVal(Callable::Function(
+                m.bind(Rc::new(RefCell::new(self.clone()))),
+            )))
+        } else {
+            Err(Exits::RuntimeError(
+                name.clone(),
+                format!("Undefined property '{}'.", name.lexeme),
+            ))
         }
-
-        if let Some(m) = self.class.find_method(&name.lexeme) {
-            return Ok(LoxValue::CallableVal(Callable::Function(m.clone())));
-        }
-
-        Err(Exits::RuntimeError(
-            name.clone(),
-            format!("Undefined property '{}'.", name.lexeme),
-        ))
     }
 
     pub fn set(&mut self, name: &Token, value: &LoxValue) {

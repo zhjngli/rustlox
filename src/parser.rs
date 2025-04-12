@@ -7,7 +7,7 @@ use crate::{
             self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
             For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
             Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
-            Star, String as TString, True, Var, While,
+            Star, String as TString, This, True, Var, While,
         },
     },
 };
@@ -413,6 +413,10 @@ impl<'a> Parser<'a> {
         } else if self.match_next(&[Number, TString]) {
             return Ok(Expr::new(E::Literal {
                 value: self.previous().literal.clone(),
+            }));
+        } else if self.match_next(&[This]) {
+            return Ok(Expr::new(E::This {
+                keyword: self.previous().clone(),
             }));
         } else if self.match_next(&[Identifier]) {
             return Ok(Expr::new(E::Variable {
