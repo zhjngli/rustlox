@@ -7,7 +7,7 @@ use std::{
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{environment::Environment, interpreter::Interpreter, stmt::Stmt, token::TokenRef};
+use crate::{environment::Environment, interpreter::Interpreter, stmt::FunctionS, token::TokenRef};
 
 #[derive(Debug, Clone)]
 pub enum LoxValue {
@@ -98,24 +98,21 @@ impl LoxCallable for NativeFunction {
 
 #[derive(Debug, Clone)]
 pub struct Function {
-    declaration: Stmt,
+    declaration: FunctionS,
     closure: Rc<RefCell<Environment>>,
     is_initializer: bool,
 }
 
-fn fn_initialization_panic<T>() -> T {
-    panic!("Function not initialized with a function declaration.")
-}
-
 impl Function {
-    pub fn new(declaration: Stmt, closure: Rc<RefCell<Environment>>, is_initializer: bool) -> Self {
-        match &declaration {
-            Stmt::Function { .. } => Function {
-                declaration,
-                closure,
-                is_initializer,
-            },
-            _ => fn_initialization_panic(),
+    pub fn new(
+        declaration: FunctionS,
+        closure: Rc<RefCell<Environment>>,
+        is_initializer: bool,
+    ) -> Self {
+        Function {
+            declaration,
+            closure,
+            is_initializer,
         }
     }
 
@@ -129,49 +126,42 @@ impl Function {
 
 impl Display for Function {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        match &self.declaration {
-            Stmt::Function { name, .. } => write!(f, "<fn {}>", name.lexeme),
-            _ => fn_initialization_panic(),
-        }
+        write!(f, "<fn {}>", self.declaration.name.lexeme)
     }
 }
 
 impl LoxCallable for Function {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
-        match &self.declaration {
-            Stmt::Function { name, params, body } => {
-                let mut environment = Environment::enclosed(Rc::clone(&self.closure));
-                params.iter().enumerate().for_each(|(i, param)| {
-                    environment.define(param.lexeme.clone(), args.get(i).unwrap().clone());
-                });
-                let result = interpreter.execute_block(body, environment.to_owned());
-                match result {
-                    Err(IR::Return(value)) => {
-                        if self.is_initializer {
-                            Environment::get_this(&self.closure, 0, name)
-                        } else {
-                            Ok(value)
-                        }
-                    }
-                    Ok(()) => {
-                        if self.is_initializer {
-                            Environment::get_this(&self.closure, 0, name)
-                        } else {
-                            Ok(LoxValue::Null)
-                        }
-                    }
-                    Err(runtime_error) => Err(runtime_error),
+        let mut environment = Environment::enclosed(Rc::clone(&self.closure));
+        self.declaration
+            .params
+            .iter()
+            .enumerate()
+            .for_each(|(i, param)| {
+                environment.define(param.lexeme.clone(), args.get(i).unwrap().clone());
+            });
+        let result = interpreter.execute_block(&self.declaration.body, environment.to_owned());
+        match result {
+            Err(IR::Return(value)) => {
+                if self.is_initializer {
+                    Environment::get_this(&self.closure, 0, &self.declaration.name)
+                } else {
+                    Ok(value)
                 }
             }
-            _ => fn_initialization_panic(),
+            Ok(()) => {
+                if self.is_initializer {
+                    Environment::get_this(&self.closure, 0, &self.declaration.name)
+                } else {
+                    Ok(LoxValue::Null)
+                }
+            }
+            Err(runtime_error) => Err(runtime_error),
         }
     }
 
     fn arity(&self) -> usize {
-        match &self.declaration {
-            Stmt::Function { params, .. } => params.len(),
-            _ => fn_initialization_panic(),
-        }
+        self.declaration.params.len()
     }
 }
 

@@ -1,45 +1,72 @@
 use crate::{expr::Expr, token::TokenRef};
 
-// TODO: Stmt and StmtKind? simplifies some statement pattern matching in function resolver
 #[derive(Debug, Clone)]
 pub enum Stmt {
-    Block {
-        stmts: Vec<Stmt>,
-    },
-    Class {
-        name: TokenRef,
-        superclass: Option<Expr>, // Must be ExprKind::Variable
-        methods: Vec<Stmt>,       // Must be Stmt::Function
-    },
-    Expr {
-        expr: Expr,
-    },
-    Function {
-        name: TokenRef,
-        params: Vec<TokenRef>,
-        body: Vec<Stmt>,
-    },
-    If {
-        condition: Expr,
-        then_branch: Box<Stmt>,
-        else_branch: Option<Box<Stmt>>,
-    },
-    Print {
-        expr: Expr,
-    },
-    Return {
-        keyword: TokenRef,
-        value: Option<Expr>,
-    },
-    Var {
-        name: TokenRef,
-        initializer: Option<Expr>,
-    },
-    While {
-        condition: Expr,
-        body: Box<Stmt>,
-    },
+    B(BlockS),
+    C(ClassS),
+    E(ExprS),
+    F(FunctionS),
+    I(IfS),
+    P(PrintS),
+    R(ReturnS),
+    V(VarS),
+    W(WhileS),
 }
+
+#[derive(Debug, Clone)]
+pub struct BlockS {
+    pub stmts: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ClassS {
+    pub name: TokenRef,
+    pub superclass: Option<Expr>, // Must be ExprKind::Variable
+    pub methods: Vec<FunctionS>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExprS {
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionS {
+    pub name: TokenRef,
+    pub params: Vec<TokenRef>,
+    pub body: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct IfS {
+    pub condition: Expr,
+    pub then_branch: Box<Stmt>,
+    pub else_branch: Option<Box<Stmt>>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PrintS {
+    pub expr: Expr,
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnS {
+    pub keyword: TokenRef,
+    pub value: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct VarS {
+    pub name: TokenRef,
+    pub initializer: Option<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileS {
+    pub condition: Expr,
+    pub body: Box<Stmt>,
+}
+
 pub trait Visitor<T> {
     fn visit_stmt(&mut self, stmt: &Stmt) -> T;
 }

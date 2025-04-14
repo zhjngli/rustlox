@@ -1,6 +1,6 @@
 use crate::{
     expr::{Expr, ExprKind as E},
-    stmt::Stmt,
+    stmt::{BlockS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, WhileS},
     token::{
         TokenLiteral, TokenRef,
         TokenType::{
@@ -53,11 +53,11 @@ impl<'a> Parser<'a> {
 
     fn declaration(&mut self) -> Result<Stmt, ParseError> {
         let stmt_result = if self.match_next(&[Class]) {
-            self.class_declaration()
+            Ok(Stmt::C(self.class_declaration()?))
         } else if self.match_next(&[Fun]) {
-            self.function("function")
+            Ok(Stmt::F(self.function("function")?))
         } else if self.match_next(&[Var]) {
-            self.var_declaration()
+            Ok(Stmt::V(self.var_declaration()?))
         } else {
             self.statement()
         };
@@ -70,7 +70,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
+    fn class_declaration(&mut self) -> Result<ClassS, ParseError> {
         let name = self.consume(&Identifier, "Expect class name.")?.clone();
 
         let mut superclass = None;
@@ -88,7 +88,7 @@ impl<'a> Parser<'a> {
         }
         self.consume(&RightBrace, "Expect '}' after class body.")?;
 
-        Ok(Stmt::Class {
+        Ok(ClassS {
             name,
             superclass,
             methods,
@@ -97,26 +97,24 @@ impl<'a> Parser<'a> {
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
         if self.match_next(&[For]) {
-            return self.for_statement();
+            return Ok(self.for_statement()?);
         }
         if self.match_next(&[If]) {
-            return self.if_statement();
+            return Ok(Stmt::I(self.if_statement()?));
         }
         if self.match_next(&[Print]) {
-            return self.print_statement();
+            return Ok(Stmt::P(self.print_statement()?));
         }
         if self.match_next(&[Return]) {
-            return self.return_statement();
+            return Ok(Stmt::R(self.return_statement()?));
         }
         if self.match_next(&[While]) {
-            return self.while_statement();
+            return Ok(Stmt::W(self.while_statement()?));
         }
         if self.match_next(&[LeftBrace]) {
-            return Ok(Stmt::Block {
-                stmts: self.block()?,
-            });
+            return Ok(Stmt::B(self.block()?));
         }
-        self.expression_statement()
+        Ok(Stmt::E(self.expression_statement()?))
     }
 
     fn for_statement(&mut self) -> Result<Stmt, ParseError> {
@@ -125,9 +123,9 @@ impl<'a> Parser<'a> {
         let initializer = if self.match_next(&[Semicolon]) {
             None
         } else if self.match_next(&[Var]) {
-            Some(self.var_declaration()?)
+            Some(Stmt::V(self.var_declaration()?))
         } else {
-            Some(self.expression_statement()?)
+            Some(Stmt::E(self.expression_statement()?))
         };
 
         let condition = if !self.check(&Semicolon) {
@@ -148,24 +146,24 @@ impl<'a> Parser<'a> {
 
         let mut body = self.statement()?;
         if let Some(inc) = increment {
-            body = Stmt::Block {
-                stmts: vec![body, Stmt::Expr { expr: inc }],
-            };
+            body = Stmt::B(BlockS {
+                stmts: vec![body, Stmt::E(ExprS { expr: inc })],
+            });
         }
-        body = Stmt::While {
+        body = Stmt::W(WhileS {
             condition,
             body: Box::new(body),
-        };
+        });
         if let Some(init) = initializer {
-            body = Stmt::Block {
+            body = Stmt::B(BlockS {
                 stmts: vec![init, body],
-            };
+            });
         }
 
         Ok(body)
     }
 
-    fn if_statement(&mut self) -> Result<Stmt, ParseError> {
+    fn if_statement(&mut self) -> Result<IfS, ParseError> {
         self.consume(&LeftParen, "Expect '(' after 'if'.")?;
         let condition = self.expression()?;
         self.consume(&RightParen, "Expect ')' after if condition.")?;
@@ -175,20 +173,20 @@ impl<'a> Parser<'a> {
         if self.match_next(&[Else]) {
             else_branch = Some(Box::new(self.statement()?));
         }
-        Ok(Stmt::If {
+        Ok(IfS {
             condition,
             then_branch,
             else_branch,
         })
     }
 
-    fn print_statement(&mut self) -> Result<Stmt, ParseError> {
+    fn print_statement(&mut self) -> Result<PrintS, ParseError> {
         let value = self.expression()?;
         self.consume(&Semicolon, "Expect ';' after value.")?;
-        Ok(Stmt::Print { expr: value })
+        Ok(PrintS { expr: value })
     }
 
-    fn return_statement(&mut self) -> Result<Stmt, ParseError> {
+    fn return_statement(&mut self) -> Result<ReturnS, ParseError> {
         let keyword = self.previous().clone();
         let value = if !self.check(&Semicolon) {
             Some(self.expression()?)
@@ -196,10 +194,10 @@ impl<'a> Parser<'a> {
             None
         };
         self.consume(&Semicolon, "Expect ';' after return value.")?;
-        Ok(Stmt::Return { keyword, value })
+        Ok(ReturnS { keyword, value })
     }
 
-    fn var_declaration(&mut self) -> Result<Stmt, ParseError> {
+    fn var_declaration(&mut self) -> Result<VarS, ParseError> {
         let name = self.consume(&Identifier, "Expect variable name.")?.clone();
         let initializer = if self.match_next(&[Equal]) {
             Some(self.expression()?.clone())
@@ -207,25 +205,25 @@ impl<'a> Parser<'a> {
             None
         };
         self.consume(&Semicolon, "Expect ';' after variable declaration.")?;
-        Ok(Stmt::Var { name, initializer })
+        Ok(VarS { name, initializer })
     }
 
-    fn while_statement(&mut self) -> Result<Stmt, ParseError> {
+    fn while_statement(&mut self) -> Result<WhileS, ParseError> {
         self.consume(&LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
         self.consume(&RightParen, "Expect ')' after condition")?;
         let body = Box::new(self.statement()?);
 
-        Ok(Stmt::While { condition, body })
+        Ok(WhileS { condition, body })
     }
 
-    fn expression_statement(&mut self) -> Result<Stmt, ParseError> {
+    fn expression_statement(&mut self) -> Result<ExprS, ParseError> {
         let expr = self.expression()?;
         self.consume(&Semicolon, "Expect ';' after expression.")?;
-        Ok(Stmt::Expr { expr: expr })
+        Ok(ExprS { expr: expr })
     }
 
-    fn function(&mut self, kind: &str) -> Result<Stmt, ParseError> {
+    fn function(&mut self, kind: &str) -> Result<FunctionS, ParseError> {
         let name = self
             .consume(&Identifier, &format!("Expect {} name.", kind))?
             .clone();
@@ -251,17 +249,17 @@ impl<'a> Parser<'a> {
         self.consume(&RightParen, "Expect ')' after parameters")?;
 
         self.consume(&LeftBrace, &format!("Expect '{{' before {} body.", kind))?;
-        let body = self.block()?;
-        Ok(Stmt::Function { name, params, body })
+        let body = self.block()?.stmts;
+        Ok(FunctionS { name, params, body })
     }
 
-    fn block(&mut self) -> Result<Vec<Stmt>, ParseError> {
+    fn block(&mut self) -> Result<BlockS, ParseError> {
         let mut stmts = Vec::new();
         while !self.check(&RightBrace) && !self.is_at_end() {
             stmts.push(self.declaration()?);
         }
         self.consume(&RightBrace, "Expect '}' after block.")?;
-        Ok(stmts)
+        Ok(BlockS { stmts })
     }
 
     fn assignment(&mut self) -> Result<Expr, ParseError> {

@@ -13,7 +13,7 @@ use crate::{
         LoxValue::{self, Bool, CallableVal, ClassInstance, Null, Number, String},
         NativeFunction,
     },
-    stmt::{Stmt, Visitor as SVisitor},
+    stmt::{BlockS, ClassS, ExprS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor, WhileS},
     token::{TokenLiteral, TokenRef, TokenType},
 };
 
@@ -248,14 +248,14 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
 impl SVisitor<Result<(), IR>> for Interpreter {
     fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), IR> {
         match stmt {
-            Stmt::Block { stmts } => {
+            Stmt::B(BlockS { stmts }) => {
                 self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
             }
-            Stmt::Class {
+            Stmt::C(ClassS {
                 name,
                 superclass: superclass_expr,
                 methods,
-            } => {
+            }) => {
                 let superclass = match superclass_expr {
                     Some(s) => {
                         let val = self.evaluate(s)?;
@@ -290,27 +290,12 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                 }
 
                 let mut ms = HashMap::new();
-                methods.iter().try_for_each(|m| match m {
-                    Stmt::Function {
-                        name,
-                        params: _,
-                        body: _,
-                    } => {
-                        ms.insert(
-                            name.lexeme.clone(),
-                            Function::new(
-                                m.clone(),
-                                self.environment.clone(),
-                                name.lexeme == "init",
-                            ),
-                        );
-                        Ok(())
-                    }
-                    _ => panic!(
-                        "Method in class should be a function statement, but got: {:?}",
-                        m
-                    ),
-                })?;
+                methods.iter().for_each(|m| {
+                    ms.insert(
+                        m.name.lexeme.clone(),
+                        Function::new(m.clone(), self.environment.clone(), m.name.lexeme == "init"),
+                    );
+                });
 
                 let class = Class::new(name.lexeme.clone(), superclass, ms);
 
@@ -323,27 +308,23 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     .assign(name, &CallableVal(Callable::Class(class)))?;
                 Ok(())
             }
-            Stmt::Expr { expr } => {
+            Stmt::E(ExprS { expr }) => {
                 self.evaluate(expr)?;
                 Ok(())
             }
-            Stmt::Function {
-                name,
-                params: _,
-                body: _,
-            } => {
-                let function = Function::new(stmt.clone(), Rc::clone(&self.environment), false);
+            Stmt::F(f) => {
+                let function = Function::new(f.clone(), Rc::clone(&self.environment), false);
                 self.environment.borrow_mut().define(
-                    name.lexeme.clone(),
+                    f.name.lexeme.clone(),
                     CallableVal(Callable::Function(function)),
                 );
                 Ok(())
             }
-            Stmt::If {
+            Stmt::I(IfS {
                 condition,
                 then_branch,
                 else_branch,
-            } => {
+            }) => {
                 let cond = self.evaluate(condition)?;
                 if self.is_truthy(&cond) {
                     self.execute(&then_branch)
@@ -354,15 +335,15 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     }
                 }
             }
-            Stmt::Print { expr } => {
+            Stmt::P(PrintS { expr }) => {
                 println!("{}", self.evaluate(expr)?);
                 Ok(())
             }
-            Stmt::Return { keyword: _, value } => match value {
+            Stmt::R(ReturnS { keyword: _, value }) => match value {
                 Some(v) => Err(IR::Return(self.evaluate(v)?)),
                 None => Err(IR::Return(Null)),
             },
-            Stmt::Var { name, initializer } => {
+            Stmt::V(VarS { name, initializer }) => {
                 let value;
                 match initializer {
                     Some(e) => value = self.evaluate(e)?,
@@ -373,7 +354,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     .define(name.lexeme.clone(), value);
                 Ok(())
             }
-            Stmt::While { condition, body } => {
+            Stmt::W(WhileS { condition, body }) => {
                 let mut cond = self.evaluate(condition)?;
                 while self.is_truthy(&cond) {
                     self.execute(body)?;
