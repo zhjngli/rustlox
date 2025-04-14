@@ -237,7 +237,7 @@ impl<'a> SVisitor<Result<(), StaticError>> for Resolver<'a> {
                     if s.name.lexeme == name.lexeme {
                         return Err(static_error(&s.name, "A class can't inherit from itself."));
                     }
-                    self.resolve_expression(&Expr::V(s.clone()))?; // TODO: instead of cloning, RC?
+                    self.resolve_expression(&Expr::V(s.clone()))?;
 
                     self.begin_scope();
                     if let Some(s) = self.scopes.last_mut() {
