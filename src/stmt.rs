@@ -8,7 +8,8 @@ pub enum Stmt {
     },
     Class {
         name: Token,
-        methods: Vec<Stmt>,
+        superclass: Option<Expr>, // Must be ExprKind::Variable
+        methods: Vec<Stmt>,       // Must be Stmt::Function
     },
     Expr {
         expr: Expr,

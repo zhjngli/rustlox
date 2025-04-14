@@ -28,6 +28,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 impl<'a> Resolver<'a> {
@@ -163,11 +164,25 @@ impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
                 self.resolve_expression(object)?;
                 Ok(())
             }
+            E::Super { keyword, method: _ } => {
+                if self.current_class == ClassType::None {
+                    return Err(parse_error(
+                        keyword,
+                        "Can't use 'super' outside of a class.",
+                    ));
+                } else if self.current_class != ClassType::Subclass {
+                    return Err(parse_error(
+                        keyword,
+                        "Can't use 'super' in a class with no superclass.",
+                    ));
+                }
+                self.resolve_local(expr, keyword)
+            }
             E::This { keyword } => match self.current_class {
-                ClassType::Class => self.resolve_local(expr, keyword),
                 ClassType::None => {
                     Err(parse_error(keyword, "Can't use 'this' outside of a class."))
                 }
+                _ => self.resolve_local(expr, keyword),
             },
             E::Unary { op: _, expr } => self.resolve_expression(expr),
             E::Variable { name } => {
@@ -195,12 +210,39 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                 self.end_scope();
                 Ok(())
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class {
+                name,
+                superclass,
+                methods,
+            } => {
                 let enclosing_class = self.current_class;
                 self.current_class = ClassType::Class;
 
                 self.declare(name)?;
                 self.define(name);
+
+                if let Some(s) = superclass {
+                    self.current_class = ClassType::Subclass;
+                    match s.kind() {
+                        E::Variable {
+                            name: superclass_name,
+                        } => {
+                            if superclass_name.lexeme == name.lexeme {
+                                return Err(parse_error(
+                                    superclass_name,
+                                    "A class can't inherit from itself.",
+                                ));
+                            }
+                        }
+                        _ => panic!("Superclass must be a variable expr: {:?}", s),
+                    }
+                    self.resolve_expression(s)?;
+
+                    self.begin_scope();
+                    if let Some(s) = self.scopes.last_mut() {
+                        s.insert("super".to_owned(), true);
+                    }
+                }
 
                 self.begin_scope();
                 if let Some(s) = self.scopes.last_mut() {
@@ -220,6 +262,10 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                     )
                 })?;
                 self.end_scope();
+
+                if let Some(_) = superclass {
+                    self.end_scope();
+                }
 
                 self.current_class = enclosing_class;
                 Ok(())

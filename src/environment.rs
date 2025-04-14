@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     lox::{Exits, LoxValue},
-    token::Token,
+    token::{Token, TokenLiteral, TokenType},
 };
 
 #[derive(Debug, Clone)]
@@ -38,6 +38,21 @@ impl Environment {
             }
         }
         env
+    }
+
+    pub fn get_this(
+        env: &Rc<RefCell<Environment>>,
+        distance: usize,
+        name: &Token,
+    ) -> Result<LoxValue, Exits> {
+        Environment::ancestor(env.clone(), distance)
+            .borrow()
+            .get(&Token::new(
+                TokenType::This,
+                "this".to_owned(),
+                TokenLiteral::Null,
+                name.line,
+            ))
     }
 
     pub fn define(&mut self, name: String, value: LoxValue) {

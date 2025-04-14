@@ -193,6 +193,38 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     )),
                 }
             }
+            E::Super { keyword, method } => {
+                let distance = match self.locals.get(expr) {
+                    Some(d) => d,
+                    None => panic!(
+                        "Couldn't look up {:?} expr distance when calling super method",
+                        expr
+                    ),
+                };
+                let superclass =
+                    match Environment::ancestor(Rc::clone(&self.environment), *distance)
+                        .borrow()
+                        .get(keyword)?
+                    {
+                        CallableVal(Callable::Class(c)) => c,
+                        _ => panic!("Did not find class from 'super': {:?}", keyword),
+                    };
+                let object = match Environment::get_this(&self.environment, distance - 1, keyword)?
+                {
+                    ClassInstance(i) => i,
+                    _ => panic!("Did not find class instance from 'this': {:?}", keyword),
+                };
+                let method = match superclass.find_method(&method.lexeme) {
+                    Some(m) => m,
+                    None => {
+                        return Err(Exits::RuntimeError(
+                            method.clone(),
+                            format!("Undefined property '{}'.", method.lexeme),
+                        ))
+                    }
+                };
+                Ok(CallableVal(Callable::Function(method.bind(object))))
+            }
             E::This { keyword } => self.lookup_var(keyword, expr),
             E::Unary { op, expr } => {
                 let right = self.evaluate(expr)?;
@@ -219,10 +251,43 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
             Stmt::Block { stmts } => {
                 self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
             }
-            Stmt::Class { name, methods } => {
+            Stmt::Class {
+                name,
+                superclass: superclass_expr,
+                methods,
+            } => {
+                let superclass = match superclass_expr {
+                    Some(s) => {
+                        let val = self.evaluate(s)?;
+                        match val {
+                            CallableVal(Callable::Class(c)) => Some(Box::new(c)),
+                            _ => {
+                                return match s.kind() {
+                                    E::Variable { name } => Err(Exits::RuntimeError(
+                                        name.clone(),
+                                        "Superclass must be a class.".to_owned(),
+                                    )),
+                                    _ => panic!("Superclass must be a variable expr: {:?}", s),
+                                }
+                            }
+                        }
+                    }
+                    None => None,
+                };
+
                 self.environment
                     .borrow_mut()
                     .define(name.lexeme.clone(), Null);
+
+                let prev_env = self.environment.clone();
+                if let Some(s) = superclass.clone() {
+                    self.environment = Rc::new(RefCell::new(Environment::enclosed(
+                        self.environment.clone(),
+                    )));
+                    self.environment
+                        .borrow_mut()
+                        .define("super".to_owned(), CallableVal(Callable::Class(*s)));
+                }
 
                 let mut ms = HashMap::new();
                 methods.iter().try_for_each(|m| match m {
@@ -247,7 +312,12 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                     ),
                 })?;
 
-                let class = Class::new(name.lexeme.clone(), ms);
+                let class = Class::new(name.lexeme.clone(), superclass, ms);
+
+                if let Some(_) = superclass_expr {
+                    self.environment = prev_env;
+                }
+
                 self.environment
                     .borrow_mut()
                     .assign(name, &CallableVal(Callable::Class(class)))?;

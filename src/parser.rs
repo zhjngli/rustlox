@@ -7,7 +7,7 @@ use crate::{
             self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
             For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
             Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
-            Star, String as TString, This, True, Var, While,
+            Star, String as TString, Super, This, True, Var, While,
         },
     },
 };
@@ -72,16 +72,27 @@ impl<'a> Parser<'a> {
 
     fn class_declaration(&mut self) -> Result<Stmt, ParseError> {
         let name = self.consume(&Identifier, "Expect class name.")?.clone();
-        self.consume(&LeftBrace, "Expect '{' before class body.")?;
 
+        let mut superclass = None;
+        if self.match_next(&[Less]) {
+            self.consume(&Identifier, "Expect superclass name.")?;
+            superclass = Some(Expr::new(E::Variable {
+                name: self.previous().clone(),
+            }));
+        }
+
+        self.consume(&LeftBrace, "Expect '{' before class body.")?;
         let mut methods = Vec::new();
         while !self.check(&RightBrace) && !self.is_at_end() {
             methods.push(self.function("method")?);
         }
-
         self.consume(&RightBrace, "Expect '}' after class body.")?;
 
-        Ok(Stmt::Class { name, methods })
+        Ok(Stmt::Class {
+            name,
+            superclass,
+            methods,
+        })
     }
 
     fn statement(&mut self) -> Result<Stmt, ParseError> {
@@ -414,6 +425,13 @@ impl<'a> Parser<'a> {
             return Ok(Expr::new(E::Literal {
                 value: self.previous().literal.clone(),
             }));
+        } else if self.match_next(&[Super]) {
+            let keyword = self.previous().clone();
+            self.consume(&Dot, "Expect '.' after 'super'.")?;
+            let method = self
+                .consume(&Identifier, "Expect superclass method name.")?
+                .clone();
+            return Ok(Expr::new(E::Super { keyword, method }));
         } else if self.match_next(&[This]) {
             return Ok(Expr::new(E::This {
                 keyword: self.previous().clone(),

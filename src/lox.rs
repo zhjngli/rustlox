@@ -7,12 +7,7 @@ use std::{
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{
-    environment::Environment,
-    interpreter::Interpreter,
-    stmt::Stmt,
-    token::{Token, TokenLiteral, TokenType},
-};
+use crate::{environment::Environment, interpreter::Interpreter, stmt::Stmt, token::Token};
 
 #[derive(Debug, Clone)]
 pub enum LoxValue {
@@ -124,22 +119,11 @@ impl Function {
         }
     }
 
-    fn bind(&self, instance: Rc<RefCell<Instance>>) -> Function {
+    pub fn bind(&self, instance: Rc<RefCell<Instance>>) -> Function {
         let env = Rc::new(RefCell::new(Environment::enclosed(self.closure.clone())));
         env.borrow_mut()
             .define("this".to_owned(), LoxValue::ClassInstance(instance));
         Function::new(self.declaration.clone(), env, self.is_initializer)
-    }
-
-    fn get_this(&self, name: &Token) -> Result<LoxValue, Exits> {
-        Environment::ancestor(self.closure.clone(), 0)
-            .borrow()
-            .get(&Token::new(
-                TokenType::This,
-                "this".to_owned(),
-                TokenLiteral::Null,
-                name.line,
-            ))
     }
 }
 
@@ -164,14 +148,14 @@ impl LoxCallable for Function {
                 match result {
                     Err(Exits::Return(value)) => {
                         if self.is_initializer {
-                            self.get_this(name)
+                            Environment::get_this(&self.closure, 0, name)
                         } else {
                             Ok(value)
                         }
                     }
                     Ok(()) => {
                         if self.is_initializer {
-                            self.get_this(name)
+                            Environment::get_this(&self.closure, 0, name)
                         } else {
                             Ok(LoxValue::Null)
                         }
@@ -194,16 +178,27 @@ impl LoxCallable for Function {
 #[derive(Debug, Clone)]
 pub struct Class {
     name: String,
+    superclass: Option<Box<Class>>,
     methods: HashMap<String, Function>,
 }
 
 impl Class {
-    pub fn new(name: String, methods: HashMap<String, Function>) -> Self {
-        Class { name, methods }
+    pub fn new(
+        name: String,
+        superclass: Option<Box<Class>>,
+        methods: HashMap<String, Function>,
+    ) -> Self {
+        Class {
+            name,
+            superclass,
+            methods,
+        }
     }
 
-    fn find_method(&self, name: &str) -> Option<&Function> {
-        self.methods.get(name)
+    pub fn find_method(&self, name: &str) -> Option<&Function> {
+        self.methods
+            .get(name)
+            .or_else(|| self.superclass.as_ref().and_then(|s| s.find_method(name)))
     }
 }
 
