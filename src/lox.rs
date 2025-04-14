@@ -227,12 +227,12 @@ impl LoxCallable for Class {
 
 #[derive(Debug, Clone)]
 pub struct Instance {
-    class: Class, // TODO: RC this so it's not deep-cloned every time an instance is created
+    class: Class,
     fields: HashMap<String, LoxValue>,
 }
 
 impl Instance {
-    pub fn new(class: Class) -> Self {
+    fn new(class: Class) -> Self {
         Instance {
             class,
             fields: HashMap::new(),

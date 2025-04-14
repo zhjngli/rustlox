@@ -464,9 +464,3 @@ impl Interpreter {
         }
     }
 }
-
-impl Default for Interpreter {
-    fn default() -> Self {
-        Self::new()
-    }
-}
