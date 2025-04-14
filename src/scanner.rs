@@ -1,9 +1,10 @@
 use once_cell::sync::Lazy;
-use std::{collections::HashMap, iter::Peekable, str::Chars};
+use std::{collections::HashMap, iter::Peekable, rc::Rc, str::Chars};
 
 use crate::token::{
     Token,
     TokenLiteral::{Null, NumberLit, StringLit},
+    TokenRef,
     TokenType::{
         self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False, For,
         Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual, Minus,
@@ -40,7 +41,7 @@ fn report_lex_error(line: usize, message: &str) {
 #[derive(Debug)]
 pub struct Scanner<'a> {
     source: Peekable<Chars<'a>>,
-    tokens: Vec<Token>,
+    tokens: Vec<TokenRef>,
     line: usize,
 }
 
@@ -53,16 +54,16 @@ impl<'a> Scanner<'a> {
         }
     }
 
-    pub fn scan_tokens(&mut self) -> &Vec<Token> {
+    pub fn scan_tokens(&mut self) -> &Vec<TokenRef> {
         while let Some(_) = self.source.peek() {
             match self.scan_token() {
-                Some(t) => self.tokens.push(t),
+                Some(t) => self.tokens.push(Rc::new(t)),
                 None => (),
             }
         }
 
         self.tokens
-            .push(Token::new(Eof, "".to_string(), Null, self.line));
+            .push(Rc::new(Token::new(Eof, "".to_string(), Null, self.line)));
         &self.tokens
     }
 

@@ -7,7 +7,7 @@ use std::{
 
 use enum_dispatch::enum_dispatch;
 
-use crate::{environment::Environment, interpreter::Interpreter, stmt::Stmt, token::Token};
+use crate::{environment::Environment, interpreter::Interpreter, stmt::Stmt, token::TokenRef};
 
 #[derive(Debug, Clone)]
 pub enum LoxValue {
@@ -34,7 +34,7 @@ impl Display for LoxValue {
 
 #[derive(Debug)]
 pub enum InterpreterResult {
-    RuntimeError(Token, String),
+    RuntimeError(TokenRef, String),
     Return(LoxValue),
 }
 
@@ -239,7 +239,7 @@ impl Instance {
         }
     }
 
-    pub fn get(&self, name: &Token) -> Result<LoxValue, IR> {
+    pub fn get(&self, name: &TokenRef) -> Result<LoxValue, IR> {
         if let Some(v) = self.fields.get(&name.lexeme) {
             Ok(v.clone())
         } else if let Some(m) = self.class.find_method(&name.lexeme) {
@@ -254,7 +254,7 @@ impl Instance {
         }
     }
 
-    pub fn set(&mut self, name: &Token, value: &LoxValue) {
+    pub fn set(&mut self, name: &TokenRef, value: &LoxValue) {
         self.fields.insert(name.lexeme.clone(), value.clone());
     }
 }

@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use crate::token::{Token, TokenLiteral};
+use crate::token::{TokenLiteral, TokenRef};
 
 static ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -16,22 +16,22 @@ pub struct Expr {
 #[derive(Debug, Clone)]
 pub enum ExprKind {
     Assign {
-        name: Token,
+        name: TokenRef,
         value: Box<Expr>,
     },
     Binary {
         left: Box<Expr>,
-        op: Token,
+        op: TokenRef,
         right: Box<Expr>,
     },
     Call {
         callee: Box<Expr>,
-        paren: Token,
+        paren: TokenRef,
         args: Vec<Expr>,
     },
     Get {
         object: Box<Expr>,
-        name: Token,
+        name: TokenRef,
     },
     Grouping {
         expr: Box<Expr>,
@@ -41,27 +41,27 @@ pub enum ExprKind {
     },
     Logical {
         left: Box<Expr>,
-        op: Token,
+        op: TokenRef,
         right: Box<Expr>,
     },
     Set {
         object: Box<Expr>,
-        name: Token,
+        name: TokenRef,
         value: Box<Expr>,
     },
     Super {
-        keyword: Token,
-        method: Token,
+        keyword: TokenRef,
+        method: TokenRef,
     },
     This {
-        keyword: Token,
+        keyword: TokenRef,
     },
     Unary {
-        op: Token,
+        op: TokenRef,
         expr: Box<Expr>,
     },
     Variable {
-        name: Token,
+        name: TokenRef,
     },
 }
 

@@ -4,7 +4,7 @@ use crate::{
     expr::{Expr, ExprKind as E, Visitor as EVisitor},
     interpreter::Interpreter,
     stmt::{Stmt, Visitor as SVisitor},
-    token::Token,
+    token::TokenRef,
 };
 
 #[derive(Debug)]
@@ -33,7 +33,7 @@ enum ClassType {
 #[derive(Debug)]
 pub struct StaticError;
 
-fn static_error(token: &Token, message: &str) -> StaticError {
+fn static_error(token: &TokenRef, message: &str) -> StaticError {
     crate::report_token_error(token, message);
     StaticError {}
 }
@@ -100,7 +100,7 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &Token) -> Result<(), StaticError> {
+    fn declare(&mut self, name: &TokenRef) -> Result<(), StaticError> {
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains_key(&name.lexeme) {
                 return Err(static_error(
@@ -113,13 +113,13 @@ impl<'a> Resolver<'a> {
         Ok(())
     }
 
-    fn define(&mut self, name: &Token) {
+    fn define(&mut self, name: &TokenRef) {
         if let Some(scope) = self.scopes.last_mut() {
             scope.insert(name.lexeme.clone(), true);
         }
     }
 
-    fn resolve_local(&mut self, expr: &Expr, name: &Token) -> Result<(), StaticError> {
+    fn resolve_local(&mut self, expr: &Expr, name: &TokenRef) -> Result<(), StaticError> {
         for (i, s) in self.scopes.iter().enumerate().rev() {
             if s.contains_key(&name.lexeme) {
                 self.interpreter

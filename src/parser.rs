@@ -2,7 +2,7 @@ use crate::{
     expr::{Expr, ExprKind as E},
     stmt::Stmt,
     token::{
-        Token, TokenLiteral,
+        TokenLiteral, TokenRef,
         TokenType::{
             self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
             For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
@@ -14,20 +14,20 @@ use crate::{
 
 #[derive(Debug, Clone)]
 pub struct Parser<'a> {
-    tokens: &'a Vec<Token>,
+    tokens: &'a Vec<TokenRef>,
     current: usize,
 }
 
 #[derive(Debug)]
 pub struct ParseError;
 
-fn parse_error(token: &Token, message: &str) -> ParseError {
+fn parse_error(token: &TokenRef, message: &str) -> ParseError {
     crate::report_token_error(token, message);
     ParseError {}
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a Vec<Token>) -> Self {
+    pub fn new(tokens: &'a Vec<TokenRef>) -> Self {
         Parser { tokens, current: 0 }
     }
 
@@ -461,7 +461,7 @@ impl<'a> Parser<'a> {
         return false;
     }
 
-    fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&Token, ParseError> {
+    fn consume(&mut self, token_type: &TokenType, message: &str) -> Result<&TokenRef, ParseError> {
         if self.check(token_type) {
             Ok(self.advance())
         } else {
@@ -476,7 +476,7 @@ impl<'a> Parser<'a> {
         self.peek().token_type == *token_type
     }
 
-    fn advance(&mut self) -> &Token {
+    fn advance(&mut self) -> &TokenRef {
         if !self.is_at_end() {
             self.current += 1;
         }
@@ -487,11 +487,11 @@ impl<'a> Parser<'a> {
         self.peek().token_type == Eof
     }
 
-    fn peek(&self) -> &Token {
+    fn peek(&self) -> &TokenRef {
         &self.tokens[self.current]
     }
 
-    fn previous(&self) -> &Token {
+    fn previous(&self) -> &TokenRef {
         &self.tokens[self.current - 1]
     }
 

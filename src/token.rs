@@ -1,4 +1,7 @@
-use std::fmt::{Display, Formatter, Result};
+use std::{
+    fmt::{Display, Formatter, Result},
+    rc::Rc,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum TokenType {
@@ -67,6 +70,8 @@ pub struct Token {
     pub literal: TokenLiteral,
     pub line: usize,
 }
+
+pub type TokenRef = Rc<Token>;
 
 impl Token {
     pub fn new(tt: TokenType, lexeme: String, tl: TokenLiteral, line: usize) -> Self {

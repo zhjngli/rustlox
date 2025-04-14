@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
     lox::{InterpreterResult as IR, LoxValue},
-    token::{Token, TokenLiteral, TokenType},
+    token::{Token, TokenLiteral, TokenRef, TokenType},
 };
 
 #[derive(Debug, Clone)]
@@ -43,23 +43,23 @@ impl Environment {
     pub fn get_this(
         env: &Rc<RefCell<Environment>>,
         distance: usize,
-        name: &Token,
+        name: &TokenRef,
     ) -> Result<LoxValue, IR> {
         Environment::ancestor(env.clone(), distance)
             .borrow()
-            .get(&Token::new(
+            .get(&Rc::new(Token::new(
                 TokenType::This,
                 "this".to_owned(),
                 TokenLiteral::Null,
                 name.line,
-            ))
+            )))
     }
 
     pub fn define(&mut self, name: String, value: LoxValue) {
         self.values.insert(name, value);
     }
 
-    pub fn get(&self, name: &Token) -> Result<LoxValue, IR> {
+    pub fn get(&self, name: &TokenRef) -> Result<LoxValue, IR> {
         let var = &name.lexeme;
         if self.values.contains_key(var) {
             return Ok(self.values.get(var).unwrap().clone());
@@ -75,7 +75,7 @@ impl Environment {
         ))
     }
 
-    pub fn assign(&mut self, name: &Token, value: &LoxValue) -> Result<(), IR> {
+    pub fn assign(&mut self, name: &TokenRef, value: &LoxValue) -> Result<(), IR> {
         let var = &name.lexeme;
         if self.values.contains_key(var) {
             self.values.insert(var.clone(), value.clone());

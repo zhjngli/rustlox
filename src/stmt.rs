@@ -1,4 +1,4 @@
-use crate::{expr::Expr, token::Token};
+use crate::{expr::Expr, token::TokenRef};
 
 // TODO: Stmt and StmtKind? simplifies some statement pattern matching in function resolver
 #[derive(Debug, Clone)]
@@ -7,7 +7,7 @@ pub enum Stmt {
         stmts: Vec<Stmt>,
     },
     Class {
-        name: Token,
+        name: TokenRef,
         superclass: Option<Expr>, // Must be ExprKind::Variable
         methods: Vec<Stmt>,       // Must be Stmt::Function
     },
@@ -15,8 +15,8 @@ pub enum Stmt {
         expr: Expr,
     },
     Function {
-        name: Token,
-        params: Vec<Token>,
+        name: TokenRef,
+        params: Vec<TokenRef>,
         body: Vec<Stmt>,
     },
     If {
@@ -28,11 +28,11 @@ pub enum Stmt {
         expr: Expr,
     },
     Return {
-        keyword: Token,
+        keyword: TokenRef,
         value: Option<Expr>,
     },
     Var {
-        name: Token,
+        name: TokenRef,
         initializer: Option<Expr>,
     },
     While {

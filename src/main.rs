@@ -54,7 +54,7 @@ fn main() {
     }
 }
 
-pub fn report_token_error(token: &crate::token::Token, message: &str) {
+pub fn report_token_error(token: &crate::token::TokenRef, message: &str) {
     if token.token_type == crate::token::TokenType::Eof {
         print_error(token.line, " at end", message);
     } else {

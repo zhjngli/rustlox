@@ -14,7 +14,7 @@ use crate::{
         NativeFunction,
     },
     stmt::{Stmt, Visitor as SVisitor},
-    token::{Token, TokenLiteral, TokenType},
+    token::{TokenLiteral, TokenRef, TokenType},
 };
 
 #[derive(Debug)]
@@ -433,7 +433,7 @@ impl Interpreter {
         result
     }
 
-    fn lookup_var(&self, name: &Token, expr: &Expr) -> Result<LoxValue, IR> {
+    fn lookup_var(&self, name: &TokenRef, expr: &Expr) -> Result<LoxValue, IR> {
         match self.locals.get(expr) {
             Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance)
                 .borrow()
