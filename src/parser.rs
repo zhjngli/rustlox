@@ -1,7 +1,7 @@
 use crate::{
     expr::{
-        Assign, Binary, Call, Expr, ExprKind as E, Get, Grouping, Literal, Logical, Set, SuperE,
-        ThisE, Unary, Variable,
+        AssignE, BinaryE, CallE, Expr, ExprKind as E, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE,
+        ThisE, UnaryE, VariableE,
     },
     stmt::{BlockS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, WhileS},
     token::{
@@ -79,7 +79,7 @@ impl<'a> Parser<'a> {
         let mut superclass = None;
         if self.match_next(&[Less]) {
             self.consume(&Identifier, "Expect superclass name.")?;
-            superclass = Some(Variable {
+            superclass = Some(VariableE {
                 name: self.previous().clone(),
             });
         }
@@ -134,7 +134,7 @@ impl<'a> Parser<'a> {
         let condition = if !self.check(&Semicolon) {
             self.expression()?
         } else {
-            Expr::new(E::Li(Literal {
+            Expr::new(E::Li(LiteralE {
                 value: TokenLiteral::Bool(true),
             }))
         };
@@ -272,14 +272,14 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             match expr.kind() {
-                E::V(Variable { name }) => {
-                    return Ok(Expr::new(E::A(Assign {
+                E::V(VariableE { name }) => {
+                    return Ok(Expr::new(E::A(AssignE {
                         name: name.clone(),
                         value: Box::new(value),
                     })))
                 }
-                E::G(Get { object, name }) => {
-                    return Ok(Expr::new(E::S(Set {
+                E::G(GetE { object, name }) => {
+                    return Ok(Expr::new(E::S(SetE {
                         object: object.clone(),
                         name: name.clone(),
                         value: Box::new(value),
@@ -298,7 +298,7 @@ impl<'a> Parser<'a> {
         while self.match_next(&[Or]) {
             let op = self.previous().clone();
             let right = self.and()?;
-            expr = Expr::new(E::Lo(Logical {
+            expr = Expr::new(E::Lo(LogicalE {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -312,7 +312,7 @@ impl<'a> Parser<'a> {
         while self.match_next(&[And]) {
             let op = self.previous().clone();
             let right = self.equality()?;
-            expr = Expr::new(E::Lo(Logical {
+            expr = Expr::new(E::Lo(LogicalE {
                 left: Box::new(expr),
                 op,
                 right: Box::new(right),
@@ -345,7 +345,7 @@ impl<'a> Parser<'a> {
         while self.match_next(token_types) {
             let op = self.previous().clone();
             let right = parse_fn(self)?;
-            expr = Expr::new(E::B(Binary {
+            expr = Expr::new(E::B(BinaryE {
                 left: Box::new(expr),
                 op: op,
                 right: Box::new(right),
@@ -358,7 +358,7 @@ impl<'a> Parser<'a> {
         if self.match_next(&[Bang, Minus]) {
             let op = self.previous().clone();
             let right = self.unary()?;
-            return Ok(Expr::new(E::U(Unary {
+            return Ok(Expr::new(E::U(UnaryE {
                 op: op,
                 expr: Box::new(right),
             })));
@@ -375,7 +375,7 @@ impl<'a> Parser<'a> {
                 let name = self
                     .consume(&Identifier, "Expect property name after '.'.")?
                     .clone();
-                expr = Expr::new(E::G(Get {
+                expr = Expr::new(E::G(GetE {
                     object: Box::new(expr),
                     name,
                 }));
@@ -402,7 +402,7 @@ impl<'a> Parser<'a> {
             .consume(&RightParen, "Expect ')' after arguments.")?
             .clone();
 
-        Ok(Expr::new(E::C(Call {
+        Ok(Expr::new(E::C(CallE {
             callee: Box::new(callee),
             paren,
             args,
@@ -411,19 +411,19 @@ impl<'a> Parser<'a> {
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_next(&[True]) {
-            return Ok(Expr::new(E::Li(Literal {
+            return Ok(Expr::new(E::Li(LiteralE {
                 value: TokenLiteral::Bool(true),
             })));
         } else if self.match_next(&[False]) {
-            return Ok(Expr::new(E::Li(Literal {
+            return Ok(Expr::new(E::Li(LiteralE {
                 value: TokenLiteral::Bool(false),
             })));
         } else if self.match_next(&[Nil]) {
-            return Ok(Expr::new(E::Li(Literal {
+            return Ok(Expr::new(E::Li(LiteralE {
                 value: TokenLiteral::Null,
             })));
         } else if self.match_next(&[Number, TString]) {
-            return Ok(Expr::new(E::Li(Literal {
+            return Ok(Expr::new(E::Li(LiteralE {
                 value: self.previous().literal.clone(),
             })));
         } else if self.match_next(&[Super]) {
@@ -438,13 +438,13 @@ impl<'a> Parser<'a> {
                 keyword: self.previous().clone(),
             })));
         } else if self.match_next(&[Identifier]) {
-            return Ok(Expr::new(E::V(Variable {
+            return Ok(Expr::new(E::V(VariableE {
                 name: self.previous().clone(),
             })));
         } else if self.match_next(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(&RightParen, "Expect ')' after expression.")?;
-            return Ok(Expr::new(E::Gr(Grouping {
+            return Ok(Expr::new(E::Gr(GroupingE {
                 expr: Box::new(expr),
             })));
         }

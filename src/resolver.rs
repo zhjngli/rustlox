@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     expr::{
-        Assign, Binary, Call, Expr, ExprKind as E, Get, Grouping, Literal, Logical, Set, SuperE,
-        ThisE, Unary, Variable, Visitor as EVisitor,
+        AssignE, BinaryE, CallE, Expr, ExprKind as E, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE,
+        ThisE, UnaryE, VariableE, Visitor as EVisitor,
     },
     interpreter::Interpreter,
     stmt::{
@@ -128,17 +128,17 @@ impl<'a> Resolver<'a> {
 impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
     fn visit_expr(&mut self, expr: &Expr) -> Result<(), StaticError> {
         match expr.kind() {
-            E::A(Assign { name, value }) => {
+            E::A(AssignE { name, value }) => {
                 self.resolve_expression(value)?;
                 self.resolve_local(expr, name)?;
                 Ok(())
             }
-            E::B(Binary { left, op: _, right }) => {
+            E::B(BinaryE { left, op: _, right }) => {
                 self.resolve_expression(left)?;
                 self.resolve_expression(right)?;
                 Ok(())
             }
-            E::C(Call {
+            E::C(CallE {
                 callee,
                 paren: _,
                 args,
@@ -147,15 +147,15 @@ impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
                 args.iter().try_for_each(|a| self.resolve_expression(a))?;
                 Ok(())
             }
-            E::G(Get { object, name: _ }) => self.resolve_expression(object),
-            E::Gr(Grouping { expr }) => self.resolve_expression(expr),
-            E::Li(Literal { value: _ }) => Ok(()),
-            E::Lo(Logical { left, op: _, right }) => {
+            E::G(GetE { object, name: _ }) => self.resolve_expression(object),
+            E::Gr(GroupingE { expr }) => self.resolve_expression(expr),
+            E::Li(LiteralE { value: _ }) => Ok(()),
+            E::Lo(LogicalE { left, op: _, right }) => {
                 self.resolve_expression(left)?;
                 self.resolve_expression(right)?;
                 Ok(())
             }
-            E::S(Set {
+            E::S(SetE {
                 object,
                 name: _,
                 value,
@@ -185,8 +185,8 @@ impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
                 )),
                 _ => self.resolve_local(expr, keyword),
             },
-            E::U(Unary { op: _, expr }) => self.resolve_expression(expr),
-            E::V(Variable { name }) => {
+            E::U(UnaryE { op: _, expr }) => self.resolve_expression(expr),
+            E::V(VariableE { name }) => {
                 if let Some(scope) = self.scopes.last() {
                     if scope.get(&name.lexeme) == Some(&false) {
                         return Err(static_error(

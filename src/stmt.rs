@@ -1,5 +1,5 @@
 use crate::{
-    expr::{Expr, Variable},
+    expr::{Expr, VariableE},
     token::TokenRef,
 };
 
@@ -24,7 +24,7 @@ pub struct BlockS {
 #[derive(Debug, Clone)]
 pub struct ClassS {
     pub name: TokenRef,
-    pub superclass: Option<Variable>,
+    pub superclass: Option<VariableE>,
     pub methods: Vec<FunctionS>,
 }
 

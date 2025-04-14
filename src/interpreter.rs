@@ -8,8 +8,8 @@ use std::{
 use crate::{
     environment::Environment,
     expr::{
-        Assign, Binary, Call, Expr, ExprKind as E, Get, Grouping, Literal, Logical, Set, SuperE,
-        ThisE, Unary, Variable, Visitor as EVisitor,
+        AssignE, BinaryE, CallE, Expr, ExprKind as E, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE,
+        ThisE, UnaryE, VariableE, Visitor as EVisitor,
     },
     lox::{
         Callable, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction,
@@ -30,7 +30,7 @@ pub struct Interpreter {
 impl EVisitor<Result<LoxValue, IR>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
         match expr.kind() {
-            E::A(Assign { name, value }) => {
+            E::A(AssignE { name, value }) => {
                 let val = self.evaluate(value)?;
                 match self.locals.get(expr) {
                     Some(distance) => {
@@ -42,7 +42,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 }
                 Ok(val)
             }
-            E::B(Binary { left, op, right }) => {
+            E::B(BinaryE { left, op, right }) => {
                 let left_val = self.evaluate(left)?;
                 let right_val = self.evaluate(right)?;
                 match op.token_type {
@@ -114,7 +114,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            E::C(Call {
+            E::C(CallE {
                 callee,
                 paren,
                 args,
@@ -145,7 +145,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     )),
                 }
             }
-            E::G(Get { object, name }) => {
+            E::G(GetE { object, name }) => {
                 let object = self.evaluate(object)?;
                 match object {
                     ClassInstance(i) => i.borrow().get(name),
@@ -155,14 +155,14 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     )),
                 }
             }
-            E::Gr(Grouping { expr }) => self.evaluate(expr),
-            E::Li(Literal { value }) => match value {
+            E::Gr(GroupingE { expr }) => self.evaluate(expr),
+            E::Li(LiteralE { value }) => match value {
                 TokenLiteral::NumberLit(n) => Ok(Number(*n)),
                 TokenLiteral::Bool(b) => Ok(Bool(*b)),
                 TokenLiteral::StringLit(s) => Ok(String(s.to_owned())),
                 TokenLiteral::Null => Ok(Null),
             },
-            E::Lo(Logical { left, op, right }) => {
+            E::Lo(LogicalE { left, op, right }) => {
                 let left = self.evaluate(left)?;
                 match op.token_type {
                     TokenType::Or => {
@@ -178,7 +178,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 }
                 self.evaluate(right)
             }
-            E::S(Set {
+            E::S(SetE {
                 object,
                 name,
                 value,
@@ -229,7 +229,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 Ok(CallVal(LoxCallable::LoxFunction(method.bind(object))))
             }
             E::T(ThisE { keyword }) => self.lookup_var(keyword, expr),
-            E::U(Unary { op, expr }) => {
+            E::U(UnaryE { op, expr }) => {
                 let right = self.evaluate(expr)?;
                 match op.token_type {
                     TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
@@ -243,7 +243,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            E::V(Variable { name }) => self.lookup_var(name, expr),
+            E::V(VariableE { name }) => self.lookup_var(name, expr),
         }
     }
 }

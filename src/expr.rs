@@ -15,65 +15,65 @@ pub struct Expr {
 
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    A(Assign),
-    B(Binary),
-    C(Call),
-    G(Get),
-    Gr(Grouping),
-    Li(Literal),
-    Lo(Logical),
-    S(Set),
+    A(AssignE),
+    B(BinaryE),
+    C(CallE),
+    G(GetE),
+    Gr(GroupingE),
+    Li(LiteralE),
+    Lo(LogicalE),
+    S(SetE),
     Su(SuperE),
     T(ThisE),
-    U(Unary),
-    V(Variable),
+    U(UnaryE),
+    V(VariableE),
 }
 
 #[derive(Debug, Clone)]
-pub struct Assign {
+pub struct AssignE {
     pub name: TokenRef,
     pub value: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Binary {
+pub struct BinaryE {
     pub left: Box<Expr>,
     pub op: TokenRef,
     pub right: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Call {
+pub struct CallE {
     pub callee: Box<Expr>,
     pub paren: TokenRef,
     pub args: Vec<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Get {
+pub struct GetE {
     pub object: Box<Expr>,
     pub name: TokenRef,
 }
 
 #[derive(Debug, Clone)]
-pub struct Grouping {
+pub struct GroupingE {
     pub expr: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Literal {
+pub struct LiteralE {
     pub value: TokenLiteral,
 }
 
 #[derive(Debug, Clone)]
-pub struct Logical {
+pub struct LogicalE {
     pub left: Box<Expr>,
     pub op: TokenRef,
     pub right: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Set {
+pub struct SetE {
     pub object: Box<Expr>,
     pub name: TokenRef,
     pub value: Box<Expr>,
@@ -91,13 +91,13 @@ pub struct ThisE {
 }
 
 #[derive(Debug, Clone)]
-pub struct Unary {
+pub struct UnaryE {
     pub op: TokenRef,
     pub expr: Box<Expr>,
 }
 
 #[derive(Debug, Clone)]
-pub struct Variable {
+pub struct VariableE {
     pub name: TokenRef,
 }
 
