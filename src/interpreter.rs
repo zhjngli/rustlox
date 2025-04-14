@@ -9,8 +9,8 @@ use crate::{
     environment::Environment,
     expr::{Expr, ExprKind as E, Visitor as EVisitor},
     lox::{
-        Callable, Class, Function, InterpreterResult as IR, LoxCallable,
-        LoxValue::{self, Bool, CallableVal, ClassInstance, Null, Number, String},
+        Callable, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction,
+        LoxValue::{self, Bool, CallVal, ClassInstance, Null, Number, String},
         NativeFunction,
     },
     stmt::{BlockS, ClassS, ExprS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor, WhileS},
@@ -123,7 +123,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     .collect::<Result<Vec<LoxValue>, IR>>()?;
 
                 match callee {
-                    CallableVal(callable) => {
+                    CallVal(callable) => {
                         if args_vals.len() != callable.arity() {
                             return Err(IR::RuntimeError(
                                 paren.clone(),
@@ -206,7 +206,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         .borrow()
                         .get(keyword)?
                     {
-                        CallableVal(Callable::Class(c)) => c,
+                        CallVal(LoxCallable::LoxClass(c)) => c,
                         _ => panic!("Did not find class from 'super': {:?}", keyword),
                     };
                 let object = match Environment::get_this(&self.environment, distance - 1, keyword)?
@@ -223,7 +223,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         ))
                     }
                 };
-                Ok(CallableVal(Callable::Function(method.bind(object))))
+                Ok(CallVal(LoxCallable::LoxFunction(method.bind(object))))
             }
             E::This { keyword } => self.lookup_var(keyword, expr),
             E::Unary { op, expr } => {
@@ -260,7 +260,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     Some(s) => {
                         let val = self.evaluate(s)?;
                         match val {
-                            CallableVal(Callable::Class(c)) => Some(Box::new(c)),
+                            CallVal(LoxCallable::LoxClass(c)) => Some(Box::new(c)),
                             _ => {
                                 return match s.kind() {
                                     E::Variable { name } => Err(IR::RuntimeError(
@@ -286,18 +286,22 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     )));
                     self.environment
                         .borrow_mut()
-                        .define("super".to_owned(), CallableVal(Callable::Class(*s)));
+                        .define("super".to_owned(), CallVal(LoxCallable::LoxClass(*s)));
                 }
 
                 let mut ms = HashMap::new();
                 methods.iter().for_each(|m| {
                     ms.insert(
                         m.name.lexeme.clone(),
-                        Function::new(m.clone(), self.environment.clone(), m.name.lexeme == "init"),
+                        LoxFunction::new(
+                            m.clone(),
+                            self.environment.clone(),
+                            m.name.lexeme == "init",
+                        ),
                     );
                 });
 
-                let class = Class::new(name.lexeme.clone(), superclass, ms);
+                let class = LoxClass::new(name.lexeme.clone(), superclass, ms);
 
                 if let Some(_) = superclass_expr {
                     self.environment = prev_env;
@@ -305,7 +309,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
 
                 self.environment
                     .borrow_mut()
-                    .assign(name, &CallableVal(Callable::Class(class)))?;
+                    .assign(name, &CallVal(LoxCallable::LoxClass(class)))?;
                 Ok(())
             }
             Stmt::E(ExprS { expr }) => {
@@ -313,10 +317,10 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                 Ok(())
             }
             Stmt::F(f) => {
-                let function = Function::new(f.clone(), Rc::clone(&self.environment), false);
+                let function = LoxFunction::new(f.clone(), Rc::clone(&self.environment), false);
                 self.environment.borrow_mut().define(
                     f.name.lexeme.clone(),
-                    CallableVal(Callable::Function(function)),
+                    CallVal(LoxCallable::LoxFunction(function)),
                 );
                 Ok(())
             }
@@ -371,7 +375,7 @@ impl Interpreter {
         let globals = Rc::new(RefCell::new(Environment::new()));
         globals.borrow_mut().define(
             "clock".to_owned(),
-            CallableVal(Callable::from(NativeFunction {
+            CallVal(LoxCallable::from(NativeFunction {
                 name: "clock".to_owned(),
                 arity: 0,
                 call: Box::new(|_, _| {

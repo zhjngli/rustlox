@@ -14,8 +14,8 @@ pub enum LoxValue {
     Bool(bool),
     Number(f64),
     String(String),
-    CallableVal(Callable),
-    ClassInstance(Rc<RefCell<Instance>>),
+    CallVal(LoxCallable),
+    ClassInstance(Rc<RefCell<LoxInstance>>),
     Null,
 }
 
@@ -25,7 +25,7 @@ impl Display for LoxValue {
             Self::Bool(b) => write!(f, "{}", b),
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
-            Self::CallableVal(c) => write!(f, "{:?}", c),
+            Self::CallVal(c) => write!(f, "{:?}", c),
             Self::ClassInstance(i) => write!(f, "{}", i.borrow()),
             Self::Null => write!(f, "null"),
         }
@@ -41,18 +41,18 @@ pub enum InterpreterResult {
 type IR = InterpreterResult;
 
 #[enum_dispatch]
-pub trait LoxCallable {
+pub trait Callable {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR>;
 
     fn arity(&self) -> usize;
 }
 
-#[enum_dispatch(LoxCallable)]
+#[enum_dispatch(Callable)]
 #[derive(Debug, Clone)]
-pub enum Callable {
+pub enum LoxCallable {
     NativeFunction,
-    Function,
-    Class,
+    LoxFunction,
+    LoxClass,
 }
 
 pub struct NativeFunction {
@@ -86,7 +86,7 @@ impl Clone for NativeFunction {
     }
 }
 
-impl LoxCallable for NativeFunction {
+impl Callable for NativeFunction {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
         (self.call)(interpreter, args)
     }
@@ -97,40 +97,40 @@ impl LoxCallable for NativeFunction {
 }
 
 #[derive(Debug, Clone)]
-pub struct Function {
+pub struct LoxFunction {
     declaration: FunctionS,
     closure: Rc<RefCell<Environment>>,
     is_initializer: bool,
 }
 
-impl Function {
+impl LoxFunction {
     pub fn new(
         declaration: FunctionS,
         closure: Rc<RefCell<Environment>>,
         is_initializer: bool,
     ) -> Self {
-        Function {
+        LoxFunction {
             declaration,
             closure,
             is_initializer,
         }
     }
 
-    pub fn bind(&self, instance: Rc<RefCell<Instance>>) -> Function {
+    pub fn bind(&self, instance: Rc<RefCell<LoxInstance>>) -> LoxFunction {
         let env = Rc::new(RefCell::new(Environment::enclosed(self.closure.clone())));
         env.borrow_mut()
             .define("this".to_owned(), LoxValue::ClassInstance(instance));
-        Function::new(self.declaration.clone(), env, self.is_initializer)
+        LoxFunction::new(self.declaration.clone(), env, self.is_initializer)
     }
 }
 
-impl Display for Function {
+impl Display for LoxFunction {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "<fn {}>", self.declaration.name.lexeme)
     }
 }
 
-impl LoxCallable for Function {
+impl Callable for LoxFunction {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
         let mut environment = Environment::enclosed(Rc::clone(&self.closure));
         self.declaration
@@ -166,41 +166,41 @@ impl LoxCallable for Function {
 }
 
 #[derive(Debug, Clone)]
-pub struct Class {
+pub struct LoxClass {
     name: String,
-    superclass: Option<Box<Class>>,
-    methods: HashMap<String, Function>,
+    superclass: Option<Box<LoxClass>>,
+    methods: HashMap<String, LoxFunction>,
 }
 
-impl Class {
+impl LoxClass {
     pub fn new(
         name: String,
-        superclass: Option<Box<Class>>,
-        methods: HashMap<String, Function>,
+        superclass: Option<Box<LoxClass>>,
+        methods: HashMap<String, LoxFunction>,
     ) -> Self {
-        Class {
+        LoxClass {
             name,
             superclass,
             methods,
         }
     }
 
-    pub fn find_method(&self, name: &str) -> Option<&Function> {
+    pub fn find_method(&self, name: &str) -> Option<&LoxFunction> {
         self.methods
             .get(name)
             .or_else(|| self.superclass.as_ref().and_then(|s| s.find_method(name)))
     }
 }
 
-impl Display for Class {
+impl Display for LoxClass {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "<class {}>", self.name)
     }
 }
 
-impl LoxCallable for Class {
+impl Callable for LoxClass {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
-        let instance = Rc::new(RefCell::new(Instance::new(self.clone())));
+        let instance = Rc::new(RefCell::new(LoxInstance::new(self.clone())));
         if let Some(initializer) = self.find_method("init") {
             initializer.bind(instance.clone()).call(interpreter, args)?;
         }
@@ -216,14 +216,14 @@ impl LoxCallable for Class {
 }
 
 #[derive(Debug, Clone)]
-pub struct Instance {
-    class: Class,
+pub struct LoxInstance {
+    class: LoxClass,
     fields: HashMap<String, LoxValue>,
 }
 
-impl Instance {
-    fn new(class: Class) -> Self {
-        Instance {
+impl LoxInstance {
+    fn new(class: LoxClass) -> Self {
+        LoxInstance {
             class,
             fields: HashMap::new(),
         }
@@ -233,7 +233,7 @@ impl Instance {
         if let Some(v) = self.fields.get(&name.lexeme) {
             Ok(v.clone())
         } else if let Some(m) = self.class.find_method(&name.lexeme) {
-            Ok(LoxValue::CallableVal(Callable::Function(
+            Ok(LoxValue::CallVal(LoxCallable::LoxFunction(
                 m.bind(Rc::new(RefCell::new(self.clone()))),
             )))
         } else {
@@ -249,7 +249,7 @@ impl Instance {
     }
 }
 
-impl Display for Instance {
+impl Display for LoxInstance {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "<instance {}>", self.class.name)
     }
