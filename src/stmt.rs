@@ -1,4 +1,7 @@
-use crate::{expr::Expr, token::TokenRef};
+use crate::{
+    expr::{Expr, Variable},
+    token::TokenRef,
+};
 
 #[derive(Debug, Clone)]
 pub enum Stmt {
@@ -21,7 +24,7 @@ pub struct BlockS {
 #[derive(Debug, Clone)]
 pub struct ClassS {
     pub name: TokenRef,
-    pub superclass: Option<Expr>, // Must be ExprKind::Variable
+    pub superclass: Option<Variable>,
     pub methods: Vec<FunctionS>,
 }
 

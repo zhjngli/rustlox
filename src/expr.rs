@@ -15,54 +15,90 @@ pub struct Expr {
 
 #[derive(Debug, Clone)]
 pub enum ExprKind {
-    Assign {
-        name: TokenRef,
-        value: Box<Expr>,
-    },
-    Binary {
-        left: Box<Expr>,
-        op: TokenRef,
-        right: Box<Expr>,
-    },
-    Call {
-        callee: Box<Expr>,
-        paren: TokenRef,
-        args: Vec<Expr>,
-    },
-    Get {
-        object: Box<Expr>,
-        name: TokenRef,
-    },
-    Grouping {
-        expr: Box<Expr>,
-    },
-    Literal {
-        value: TokenLiteral,
-    },
-    Logical {
-        left: Box<Expr>,
-        op: TokenRef,
-        right: Box<Expr>,
-    },
-    Set {
-        object: Box<Expr>,
-        name: TokenRef,
-        value: Box<Expr>,
-    },
-    Super {
-        keyword: TokenRef,
-        method: TokenRef,
-    },
-    This {
-        keyword: TokenRef,
-    },
-    Unary {
-        op: TokenRef,
-        expr: Box<Expr>,
-    },
-    Variable {
-        name: TokenRef,
-    },
+    A(Assign),
+    B(Binary),
+    C(Call),
+    G(Get),
+    Gr(Grouping),
+    Li(Literal),
+    Lo(Logical),
+    S(Set),
+    Su(SuperE),
+    T(ThisE),
+    U(Unary),
+    V(Variable),
+}
+
+#[derive(Debug, Clone)]
+pub struct Assign {
+    pub name: TokenRef,
+    pub value: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Binary {
+    pub left: Box<Expr>,
+    pub op: TokenRef,
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Call {
+    pub callee: Box<Expr>,
+    pub paren: TokenRef,
+    pub args: Vec<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Get {
+    pub object: Box<Expr>,
+    pub name: TokenRef,
+}
+
+#[derive(Debug, Clone)]
+pub struct Grouping {
+    pub expr: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Literal {
+    pub value: TokenLiteral,
+}
+
+#[derive(Debug, Clone)]
+pub struct Logical {
+    pub left: Box<Expr>,
+    pub op: TokenRef,
+    pub right: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Set {
+    pub object: Box<Expr>,
+    pub name: TokenRef,
+    pub value: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SuperE {
+    pub keyword: TokenRef,
+    pub method: TokenRef,
+}
+
+#[derive(Debug, Clone)]
+pub struct ThisE {
+    pub keyword: TokenRef,
+}
+
+#[derive(Debug, Clone)]
+pub struct Unary {
+    pub op: TokenRef,
+    pub expr: Box<Expr>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Variable {
+    pub name: TokenRef,
 }
 
 pub trait Visitor<T> {

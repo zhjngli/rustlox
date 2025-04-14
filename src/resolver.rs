@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 
 use crate::{
-    expr::{Expr, ExprKind as E, Visitor as EVisitor},
+    expr::{
+        Assign, Binary, Call, Expr, ExprKind as E, Get, Grouping, Literal, Logical, Set, SuperE,
+        ThisE, Unary, Variable, Visitor as EVisitor,
+    },
     interpreter::Interpreter,
     stmt::{
         BlockS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor,
@@ -125,43 +128,43 @@ impl<'a> Resolver<'a> {
 impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
     fn visit_expr(&mut self, expr: &Expr) -> Result<(), StaticError> {
         match expr.kind() {
-            E::Assign { name, value } => {
+            E::A(Assign { name, value }) => {
                 self.resolve_expression(value)?;
                 self.resolve_local(expr, name)?;
                 Ok(())
             }
-            E::Binary { left, op: _, right } => {
+            E::B(Binary { left, op: _, right }) => {
                 self.resolve_expression(left)?;
                 self.resolve_expression(right)?;
                 Ok(())
             }
-            E::Call {
+            E::C(Call {
                 callee,
                 paren: _,
                 args,
-            } => {
+            }) => {
                 self.resolve_expression(callee)?;
                 args.iter().try_for_each(|a| self.resolve_expression(a))?;
                 Ok(())
             }
-            E::Get { object, name: _ } => self.resolve_expression(object),
-            E::Grouping { expr } => self.resolve_expression(expr),
-            E::Literal { value: _ } => Ok(()),
-            E::Logical { left, op: _, right } => {
+            E::G(Get { object, name: _ }) => self.resolve_expression(object),
+            E::Gr(Grouping { expr }) => self.resolve_expression(expr),
+            E::Li(Literal { value: _ }) => Ok(()),
+            E::Lo(Logical { left, op: _, right }) => {
                 self.resolve_expression(left)?;
                 self.resolve_expression(right)?;
                 Ok(())
             }
-            E::Set {
+            E::S(Set {
                 object,
                 name: _,
                 value,
-            } => {
+            }) => {
                 self.resolve_expression(value)?;
                 self.resolve_expression(object)?;
                 Ok(())
             }
-            E::Super { keyword, method: _ } => {
+            E::Su(SuperE { keyword, method: _ }) => {
                 if self.current_class == ClassType::None {
                     return Err(static_error(
                         keyword,
@@ -175,15 +178,15 @@ impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
                 }
                 self.resolve_local(expr, keyword)
             }
-            E::This { keyword } => match self.current_class {
+            E::T(ThisE { keyword }) => match self.current_class {
                 ClassType::None => Err(static_error(
                     keyword,
                     "Can't use 'this' outside of a class.",
                 )),
                 _ => self.resolve_local(expr, keyword),
             },
-            E::Unary { op: _, expr } => self.resolve_expression(expr),
-            E::Variable { name } => {
+            E::U(Unary { op: _, expr }) => self.resolve_expression(expr),
+            E::V(Variable { name }) => {
                 if let Some(scope) = self.scopes.last() {
                     if scope.get(&name.lexeme) == Some(&false) {
                         return Err(static_error(
@@ -221,20 +224,10 @@ impl<'a> SVisitor<Result<(), StaticError>> for Resolver<'a> {
 
                 if let Some(s) = superclass {
                     self.current_class = ClassType::Subclass;
-                    match s.kind() {
-                        E::Variable {
-                            name: superclass_name,
-                        } => {
-                            if superclass_name.lexeme == name.lexeme {
-                                return Err(static_error(
-                                    superclass_name,
-                                    "A class can't inherit from itself.",
-                                ));
-                            }
-                        }
-                        _ => panic!("Superclass must be a variable expr: {:?}", s),
+                    if s.name.lexeme == name.lexeme {
+                        return Err(static_error(&s.name, "A class can't inherit from itself."));
                     }
-                    self.resolve_expression(s)?;
+                    self.resolve_expression(&Expr::new(E::V(s.clone())))?; // TODO: maybe this is wrong. if i create a new Expr does that mess up the Expr uids created during parsing?
 
                     self.begin_scope();
                     if let Some(s) = self.scopes.last_mut() {

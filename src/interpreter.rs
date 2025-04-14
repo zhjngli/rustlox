@@ -7,7 +7,10 @@ use std::{
 
 use crate::{
     environment::Environment,
-    expr::{Expr, ExprKind as E, Visitor as EVisitor},
+    expr::{
+        Assign, Binary, Call, Expr, ExprKind as E, Get, Grouping, Literal, Logical, Set, SuperE,
+        ThisE, Unary, Variable, Visitor as EVisitor,
+    },
     lox::{
         Callable, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction,
         LoxValue::{self, Bool, CallVal, ClassInstance, Null, Number, String},
@@ -27,7 +30,7 @@ pub struct Interpreter {
 impl EVisitor<Result<LoxValue, IR>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
         match expr.kind() {
-            E::Assign { name, value } => {
+            E::A(Assign { name, value }) => {
                 let val = self.evaluate(value)?;
                 match self.locals.get(expr) {
                     Some(distance) => {
@@ -39,7 +42,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 }
                 Ok(val)
             }
-            E::Binary { left, op, right } => {
+            E::B(Binary { left, op, right }) => {
                 let left_val = self.evaluate(left)?;
                 let right_val = self.evaluate(right)?;
                 match op.token_type {
@@ -111,11 +114,11 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            E::Call {
+            E::C(Call {
                 callee,
                 paren,
                 args,
-            } => {
+            }) => {
                 let callee = self.evaluate(callee)?;
                 let args_vals: Vec<LoxValue> = args
                     .into_iter()
@@ -142,7 +145,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     )),
                 }
             }
-            E::Get { object, name } => {
+            E::G(Get { object, name }) => {
                 let object = self.evaluate(object)?;
                 match object {
                     ClassInstance(i) => i.borrow().get(name),
@@ -152,14 +155,14 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     )),
                 }
             }
-            E::Grouping { expr } => self.evaluate(expr),
-            E::Literal { value } => match value {
+            E::Gr(Grouping { expr }) => self.evaluate(expr),
+            E::Li(Literal { value }) => match value {
                 TokenLiteral::NumberLit(n) => Ok(Number(*n)),
                 TokenLiteral::Bool(b) => Ok(Bool(*b)),
                 TokenLiteral::StringLit(s) => Ok(String(s.to_owned())),
                 TokenLiteral::Null => Ok(Null),
             },
-            E::Logical { left, op, right } => {
+            E::Lo(Logical { left, op, right }) => {
                 let left = self.evaluate(left)?;
                 match op.token_type {
                     TokenType::Or => {
@@ -175,11 +178,11 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 }
                 self.evaluate(right)
             }
-            E::Set {
+            E::S(Set {
                 object,
                 name,
                 value,
-            } => {
+            }) => {
                 let instance = self.evaluate(object)?;
                 match instance {
                     ClassInstance(i) => {
@@ -193,7 +196,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     )),
                 }
             }
-            E::Super { keyword, method } => {
+            E::Su(SuperE { keyword, method }) => {
                 let distance = match self.locals.get(expr) {
                     Some(d) => d,
                     None => panic!(
@@ -225,8 +228,8 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 };
                 Ok(CallVal(LoxCallable::LoxFunction(method.bind(object))))
             }
-            E::This { keyword } => self.lookup_var(keyword, expr),
-            E::Unary { op, expr } => {
+            E::T(ThisE { keyword }) => self.lookup_var(keyword, expr),
+            E::U(Unary { op, expr }) => {
                 let right = self.evaluate(expr)?;
                 match op.token_type {
                     TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
@@ -240,7 +243,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     _ => Ok(Null),
                 }
             }
-            E::Variable { name } => self.lookup_var(name, expr),
+            E::V(Variable { name }) => self.lookup_var(name, expr),
         }
     }
 }
@@ -258,17 +261,14 @@ impl SVisitor<Result<(), IR>> for Interpreter {
             }) => {
                 let superclass = match superclass_expr {
                     Some(s) => {
-                        let val = self.evaluate(s)?;
+                        let val = self.evaluate(&Expr::new(E::V(s.clone())))?;
                         match val {
                             CallVal(LoxCallable::LoxClass(c)) => Some(Box::new(c)),
                             _ => {
-                                return match s.kind() {
-                                    E::Variable { name } => Err(IR::RuntimeError(
-                                        name.clone(),
-                                        "Superclass must be a class.".to_owned(),
-                                    )),
-                                    _ => panic!("Superclass must be a variable expr: {:?}", s),
-                                }
+                                return Err(IR::RuntimeError(
+                                    s.name.clone(),
+                                    "Superclass must be a class.".to_owned(),
+                                ))
                             }
                         }
                     }
