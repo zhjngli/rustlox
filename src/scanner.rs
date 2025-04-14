@@ -1,16 +1,15 @@
 use once_cell::sync::Lazy;
 use std::{collections::HashMap, iter::Peekable, str::Chars};
 
-use crate::{
-    errors::report_lex_error,
-    token::TokenLiteral::{Null, NumberLit, StringLit},
-    token::TokenType::{
-        And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False, For, Fun,
-        Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual, Minus, Nil,
-        Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash, Star,
+use crate::token::{
+    Token,
+    TokenLiteral::{Null, NumberLit, StringLit},
+    TokenType::{
+        self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False, For,
+        Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual, Minus,
+        Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash, Star,
         String as TString, Super, This, True, Var, While,
     },
-    token::{Token, TokenType},
 };
 
 static KEYWORDS: Lazy<HashMap<String, TokenType>> = Lazy::new(|| {
@@ -33,6 +32,10 @@ static KEYWORDS: Lazy<HashMap<String, TokenType>> = Lazy::new(|| {
     m.insert("while".to_string(), While);
     m
 });
+
+fn report_lex_error(line: usize, message: &str) {
+    crate::print_error(line, "", message)
+}
 
 #[derive(Debug)]
 pub struct Scanner<'a> {

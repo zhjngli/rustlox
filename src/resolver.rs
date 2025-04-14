@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use crate::{
     expr::{Expr, ExprKind as E, Visitor as EVisitor},
     interpreter::Interpreter,
-    parser::{parse_error, ParseError},
     stmt::{Stmt, Visitor as SVisitor},
     token::Token,
 };
@@ -31,6 +30,14 @@ enum ClassType {
     Subclass,
 }
 
+#[derive(Debug)]
+pub struct StaticError;
+
+fn static_error(token: &Token, message: &str) -> StaticError {
+    crate::report_token_error(token, message);
+    StaticError {}
+}
+
 impl<'a> Resolver<'a> {
     pub fn new(interpreter: &'a mut Interpreter) -> Self {
         Resolver {
@@ -41,7 +48,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    pub fn resolve(&mut self, stmts: &Vec<Stmt>) -> Result<(), ParseError> {
+    pub fn resolve(&mut self, stmts: &Vec<Stmt>) -> Result<(), StaticError> {
         stmts.iter().try_for_each(|s| self.resolve_statement(s))
     }
 
@@ -49,7 +56,7 @@ impl<'a> Resolver<'a> {
         &mut self,
         function: &Stmt,
         function_type: FunctionType,
-    ) -> Result<(), ParseError> {
+    ) -> Result<(), StaticError> {
         match function {
             Stmt::Function {
                 name: _,
@@ -77,11 +84,11 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    fn resolve_statement(&mut self, stmt: &Stmt) -> Result<(), ParseError> {
+    fn resolve_statement(&mut self, stmt: &Stmt) -> Result<(), StaticError> {
         stmt.accept(self)
     }
 
-    fn resolve_expression(&mut self, expr: &Expr) -> Result<(), ParseError> {
+    fn resolve_expression(&mut self, expr: &Expr) -> Result<(), StaticError> {
         expr.accept(self)
     }
 
@@ -93,10 +100,10 @@ impl<'a> Resolver<'a> {
         self.scopes.pop();
     }
 
-    fn declare(&mut self, name: &Token) -> Result<(), ParseError> {
+    fn declare(&mut self, name: &Token) -> Result<(), StaticError> {
         if let Some(scope) = self.scopes.last_mut() {
             if scope.contains_key(&name.lexeme) {
-                return Err(parse_error(
+                return Err(static_error(
                     name,
                     "Already a variable with this name in this scope.",
                 ));
@@ -112,8 +119,7 @@ impl<'a> Resolver<'a> {
         }
     }
 
-    // TODO does this need to return a result? always returns Ok(())
-    fn resolve_local(&mut self, expr: &Expr, name: &Token) -> Result<(), ParseError> {
+    fn resolve_local(&mut self, expr: &Expr, name: &Token) -> Result<(), StaticError> {
         for (i, s) in self.scopes.iter().enumerate().rev() {
             if s.contains_key(&name.lexeme) {
                 self.interpreter
@@ -125,8 +131,8 @@ impl<'a> Resolver<'a> {
     }
 }
 
-impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
-    fn visit_expr(&mut self, expr: &Expr) -> Result<(), ParseError> {
+impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
+    fn visit_expr(&mut self, expr: &Expr) -> Result<(), StaticError> {
         match expr.kind() {
             E::Assign { name, value } => {
                 self.resolve_expression(value)?;
@@ -166,12 +172,12 @@ impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
             }
             E::Super { keyword, method: _ } => {
                 if self.current_class == ClassType::None {
-                    return Err(parse_error(
+                    return Err(static_error(
                         keyword,
                         "Can't use 'super' outside of a class.",
                     ));
                 } else if self.current_class != ClassType::Subclass {
-                    return Err(parse_error(
+                    return Err(static_error(
                         keyword,
                         "Can't use 'super' in a class with no superclass.",
                     ));
@@ -179,16 +185,17 @@ impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
                 self.resolve_local(expr, keyword)
             }
             E::This { keyword } => match self.current_class {
-                ClassType::None => {
-                    Err(parse_error(keyword, "Can't use 'this' outside of a class."))
-                }
+                ClassType::None => Err(static_error(
+                    keyword,
+                    "Can't use 'this' outside of a class.",
+                )),
                 _ => self.resolve_local(expr, keyword),
             },
             E::Unary { op: _, expr } => self.resolve_expression(expr),
             E::Variable { name } => {
                 if let Some(scope) = self.scopes.last() {
                     if scope.get(&name.lexeme) == Some(&false) {
-                        return Err(parse_error(
+                        return Err(static_error(
                             name,
                             "Can't read local variable in its own initializer.",
                         ));
@@ -201,8 +208,8 @@ impl<'a> EVisitor<Result<(), ParseError>> for Resolver<'a> {
     }
 }
 
-impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
-    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), ParseError> {
+impl<'a> SVisitor<Result<(), StaticError>> for Resolver<'a> {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), StaticError> {
         match stmt {
             Stmt::Block { stmts } => {
                 self.begin_scope();
@@ -228,7 +235,7 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
                             name: superclass_name,
                         } => {
                             if superclass_name.lexeme == name.lexeme {
-                                return Err(parse_error(
+                                return Err(static_error(
                                     superclass_name,
                                     "A class can't inherit from itself.",
                                 ));
@@ -297,11 +304,11 @@ impl<'a> SVisitor<Result<(), ParseError>> for Resolver<'a> {
             Stmt::Print { expr } => self.resolve_expression(expr),
             Stmt::Return { keyword, value } => {
                 if self.current_function == FunctionType::None {
-                    return Err(parse_error(keyword, "Can't return from top-level code."));
+                    return Err(static_error(keyword, "Can't return from top-level code."));
                 }
                 if let Some(expr) = value {
                     if self.current_function == FunctionType::Initializer {
-                        return Err(parse_error(
+                        return Err(static_error(
                             keyword,
                             "Can't return a value from an initializer.",
                         ));

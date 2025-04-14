@@ -33,16 +33,16 @@ impl Display for LoxValue {
 }
 
 #[derive(Debug)]
-pub enum Exits {
-    // TODO: add ParseError here?
-    // TODO: use new StaticError for Resolver
+pub enum InterpreterResult {
     RuntimeError(Token, String),
     Return(LoxValue),
 }
 
+type IR = InterpreterResult;
+
 #[enum_dispatch]
 pub trait LoxCallable {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits>;
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR>;
 
     fn arity(&self) -> usize;
 }
@@ -58,7 +58,7 @@ pub enum Callable {
 pub struct NativeFunction {
     pub name: String,
     pub arity: usize,
-    pub call: Box<dyn Fn(&mut Interpreter, Vec<LoxValue>) -> Result<LoxValue, Exits>>,
+    pub call: Box<dyn Fn(&mut Interpreter, Vec<LoxValue>) -> Result<LoxValue, IR>>,
 }
 
 impl Display for NativeFunction {
@@ -87,7 +87,7 @@ impl Clone for NativeFunction {
 }
 
 impl LoxCallable for NativeFunction {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
         (self.call)(interpreter, args)
     }
 
@@ -137,7 +137,7 @@ impl Display for Function {
 }
 
 impl LoxCallable for Function {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
         match &self.declaration {
             Stmt::Function { name, params, body } => {
                 let mut environment = Environment::enclosed(Rc::clone(&self.closure));
@@ -146,7 +146,7 @@ impl LoxCallable for Function {
                 });
                 let result = interpreter.execute_block(body, environment.to_owned());
                 match result {
-                    Err(Exits::Return(value)) => {
+                    Err(IR::Return(value)) => {
                         if self.is_initializer {
                             Environment::get_this(&self.closure, 0, name)
                         } else {
@@ -209,7 +209,7 @@ impl Display for Class {
 }
 
 impl LoxCallable for Class {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, Exits> {
+    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
         let instance = Rc::new(RefCell::new(Instance::new(self.clone())));
         if let Some(initializer) = self.find_method("init") {
             initializer.bind(instance.clone()).call(interpreter, args)?;
@@ -239,7 +239,7 @@ impl Instance {
         }
     }
 
-    pub fn get(&self, name: &Token) -> Result<LoxValue, Exits> {
+    pub fn get(&self, name: &Token) -> Result<LoxValue, IR> {
         if let Some(v) = self.fields.get(&name.lexeme) {
             Ok(v.clone())
         } else if let Some(m) = self.class.find_method(&name.lexeme) {
@@ -247,7 +247,7 @@ impl Instance {
                 m.bind(Rc::new(RefCell::new(self.clone()))),
             )))
         } else {
-            Err(Exits::RuntimeError(
+            Err(IR::RuntimeError(
                 name.clone(),
                 format!("Undefined property '{}'.", name.lexeme),
             ))

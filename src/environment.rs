@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use crate::{
-    lox::{Exits, LoxValue},
+    lox::{InterpreterResult as IR, LoxValue},
     token::{Token, TokenLiteral, TokenType},
 };
 
@@ -44,7 +44,7 @@ impl Environment {
         env: &Rc<RefCell<Environment>>,
         distance: usize,
         name: &Token,
-    ) -> Result<LoxValue, Exits> {
+    ) -> Result<LoxValue, IR> {
         Environment::ancestor(env.clone(), distance)
             .borrow()
             .get(&Token::new(
@@ -59,7 +59,7 @@ impl Environment {
         self.values.insert(name, value);
     }
 
-    pub fn get(&self, name: &Token) -> Result<LoxValue, Exits> {
+    pub fn get(&self, name: &Token) -> Result<LoxValue, IR> {
         let var = &name.lexeme;
         if self.values.contains_key(var) {
             return Ok(self.values.get(var).unwrap().clone());
@@ -69,13 +69,13 @@ impl Environment {
             return e.borrow().get(name);
         }
 
-        Err(Exits::RuntimeError(
+        Err(IR::RuntimeError(
             name.clone(),
             format!("Undefined variable '{}'.", var),
         ))
     }
 
-    pub fn assign(&mut self, name: &Token, value: &LoxValue) -> Result<(), Exits> {
+    pub fn assign(&mut self, name: &Token, value: &LoxValue) -> Result<(), IR> {
         let var = &name.lexeme;
         if self.values.contains_key(var) {
             self.values.insert(var.clone(), value.clone());
@@ -87,7 +87,7 @@ impl Environment {
             return Ok(());
         }
 
-        Err(Exits::RuntimeError(
+        Err(IR::RuntimeError(
             name.clone(),
             format!("Undefined variable '{}'.", var),
         ))

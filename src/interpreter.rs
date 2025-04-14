@@ -9,7 +9,7 @@ use crate::{
     environment::Environment,
     expr::{Expr, ExprKind as E, Visitor as EVisitor},
     lox::{
-        Callable, Class, Exits, Function, LoxCallable,
+        Callable, Class, Function, InterpreterResult as IR, LoxCallable,
         LoxValue::{self, Bool, CallableVal, ClassInstance, Null, Number, String},
         NativeFunction,
     },
@@ -24,8 +24,8 @@ pub struct Interpreter {
     locals: HashMap<Expr, usize>,
 }
 
-impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
-    fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
+impl EVisitor<Result<LoxValue, IR>> for Interpreter {
+    fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
         match expr.kind() {
             E::Assign { name, value } => {
                 let val = self.evaluate(value)?;
@@ -46,28 +46,28 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     // comparison
                     TokenType::Greater => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l > r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
                     },
                     TokenType::GreaterEqual => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l >= r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
                     },
                     TokenType::Less => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l < r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
                     },
                     TokenType::LessEqual => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l <= r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
@@ -77,7 +77,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     // arithmetic
                     TokenType::Minus => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l - r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
@@ -89,21 +89,21 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                             s.push_str(&r);
                             Ok(String(s))
                         }
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers or strings", op).to_owned(),
                         )),
                     },
                     TokenType::Slash => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l / r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
                     },
                     TokenType::Star => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l * r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operands of ({:?}) must be numbers", op).to_owned(),
                         )),
@@ -120,12 +120,12 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                 let args_vals: Vec<LoxValue> = args
                     .into_iter()
                     .map(|a| self.evaluate(a))
-                    .collect::<Result<Vec<LoxValue>, Exits>>()?;
+                    .collect::<Result<Vec<LoxValue>, IR>>()?;
 
                 match callee {
                     CallableVal(callable) => {
                         if args_vals.len() != callable.arity() {
-                            return Err(Exits::RuntimeError(
+                            return Err(IR::RuntimeError(
                                 paren.clone(),
                                 format!(
                                     "Expected {} arguments but got {}.",
@@ -136,7 +136,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                         }
                         callable.call(self, args_vals)
                     }
-                    _ => Err(Exits::RuntimeError(
+                    _ => Err(IR::RuntimeError(
                         paren.clone(),
                         "Can only call functions and classes".to_owned(),
                     )),
@@ -146,7 +146,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                 let object = self.evaluate(object)?;
                 match object {
                     ClassInstance(i) => i.borrow().get(name),
-                    _ => Err(Exits::RuntimeError(
+                    _ => Err(IR::RuntimeError(
                         name.clone(),
                         "Only instances have properties.".to_owned(),
                     )),
@@ -187,7 +187,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                         i.borrow_mut().set(name, &value);
                         Ok(value)
                     }
-                    _ => Err(Exits::RuntimeError(
+                    _ => Err(IR::RuntimeError(
                         name.clone(),
                         "Only instances have fields.".to_owned(),
                     )),
@@ -217,7 +217,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                 let method = match superclass.find_method(&method.lexeme) {
                     Some(m) => m,
                     None => {
-                        return Err(Exits::RuntimeError(
+                        return Err(IR::RuntimeError(
                             method.clone(),
                             format!("Undefined property '{}'.", method.lexeme),
                         ))
@@ -232,7 +232,7 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
                     TokenType::Bang => return Ok(Bool(!self.is_truthy(&right))),
                     TokenType::Minus => match right {
                         Number(r) => return Ok(Number(-r)),
-                        _ => Err(Exits::RuntimeError(
+                        _ => Err(IR::RuntimeError(
                             op.clone(),
                             format!("Operand of ({:?}) must be a number.", op).to_owned(),
                         )),
@@ -245,8 +245,8 @@ impl EVisitor<Result<LoxValue, Exits>> for Interpreter {
     }
 }
 
-impl SVisitor<Result<(), Exits>> for Interpreter {
-    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), Exits> {
+impl SVisitor<Result<(), IR>> for Interpreter {
+    fn visit_stmt(&mut self, stmt: &Stmt) -> Result<(), IR> {
         match stmt {
             Stmt::Block { stmts } => {
                 self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
@@ -263,7 +263,7 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                             CallableVal(Callable::Class(c)) => Some(Box::new(c)),
                             _ => {
                                 return match s.kind() {
-                                    E::Variable { name } => Err(Exits::RuntimeError(
+                                    E::Variable { name } => Err(IR::RuntimeError(
                                         name.clone(),
                                         "Superclass must be a class.".to_owned(),
                                     )),
@@ -359,8 +359,8 @@ impl SVisitor<Result<(), Exits>> for Interpreter {
                 Ok(())
             }
             Stmt::Return { keyword: _, value } => match value {
-                Some(v) => Err(Exits::Return(self.evaluate(v)?)),
-                None => Err(Exits::Return(Null)),
+                Some(v) => Err(IR::Return(self.evaluate(v)?)),
+                None => Err(IR::Return(Null)),
             },
             Stmt::Var { name, initializer } => {
                 let value;
@@ -410,14 +410,14 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), Exits> {
+    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), IR> {
         for stmt in stmts {
             self.execute(stmt)?;
         }
         Ok(())
     }
 
-    fn execute(&mut self, stmt: &Stmt) -> Result<(), Exits> {
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), IR> {
         stmt.accept(self)
     }
 
@@ -425,7 +425,7 @@ impl Interpreter {
         self.locals.insert(expr, depth);
     }
 
-    pub fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), Exits> {
+    pub fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), IR> {
         let previous = Rc::clone(&self.environment);
         self.environment = Rc::new(RefCell::new(env));
         let result = stmts.iter().try_for_each(|s| self.execute(s));
@@ -433,7 +433,7 @@ impl Interpreter {
         result
     }
 
-    fn lookup_var(&self, name: &Token, expr: &Expr) -> Result<LoxValue, Exits> {
+    fn lookup_var(&self, name: &Token, expr: &Expr) -> Result<LoxValue, IR> {
         match self.locals.get(expr) {
             Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance)
                 .borrow()
@@ -442,7 +442,7 @@ impl Interpreter {
         }
     }
 
-    fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, Exits> {
+    fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
         expr.accept(self)
     }
 

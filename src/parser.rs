@@ -21,8 +21,8 @@ pub struct Parser<'a> {
 #[derive(Debug)]
 pub struct ParseError;
 
-pub fn parse_error(token: &Token, message: &str) -> ParseError {
-    crate::errors::report_token_error(token, message);
+fn parse_error(token: &Token, message: &str) -> ParseError {
+    crate::report_token_error(token, message);
     ParseError {}
 }
 
