@@ -64,7 +64,7 @@ pub enum TokenLiteral {
 
 #[derive(Debug, Clone)]
 pub struct Token {
-    // TODO: make fields private and use getters?
+    // as long as Tokens are accessed via TokenRef, you cannot assign data to it
     pub token_type: TokenType,
     pub lexeme: String,
     pub literal: TokenLiteral,
