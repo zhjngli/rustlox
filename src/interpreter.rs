@@ -89,9 +89,9 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     },
                     TokenType::Plus => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l + r)),
-                        (String(l), String(r)) => {
+                        (String(l), v) => {
                             let mut s = l;
-                            s.push_str(&r);
+                            s.push_str(&v.to_string());
                             Ok(String(s))
                         }
                         _ => Err(IR::RuntimeError(
