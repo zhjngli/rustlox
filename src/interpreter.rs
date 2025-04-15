@@ -96,10 +96,14 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         }
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({}) must be numbers or strings", op.lexeme).to_owned(),
+                            format!("Operands of ({}) must be numbers or strings", op.lexeme)
+                                .to_owned(),
                         )),
                     },
                     TokenType::Slash => match (left_val, right_val) {
+                        (Number(_), Number(0.)) => {
+                            Err(IR::RuntimeError(op.clone(), "Division by zero".to_owned()))
+                        }
                         (Number(l), Number(r)) => Ok(Number(l / r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
