@@ -53,28 +53,28 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         (Number(l), Number(r)) => Ok(Bool(l > r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::GreaterEqual => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l >= r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::Less => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l < r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::LessEqual => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Bool(l <= r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::BangEqual => return Ok(Bool(!self.is_equal(left_val, right_val))),
@@ -84,7 +84,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         (Number(l), Number(r)) => Ok(Number(l - r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::Plus => match (left_val, right_val) {
@@ -96,21 +96,21 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         }
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers or strings", op).to_owned(),
+                            format!("Operands of ({}) must be numbers or strings", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::Slash => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l / r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     TokenType::Star => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l * r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operands of ({:?}) must be numbers", op).to_owned(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
                     _ => Ok(Null),
@@ -245,7 +245,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         Number(r) => return Ok(Number(-r)),
                         _ => Err(IR::RuntimeError(
                             op.clone(),
-                            format!("Operand of ({:?}) must be a number.", op).to_owned(),
+                            format!("Operand of ({}) must be a number.", op.lexeme).to_owned(),
                         )),
                     },
                     _ => Ok(Null),
