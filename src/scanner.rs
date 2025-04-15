@@ -43,6 +43,7 @@ pub struct Scanner<'a> {
     source: Peekable<Chars<'a>>,
     tokens: Vec<TokenRef>,
     line: usize,
+    block_comment: usize,
 }
 
 impl<'a> Scanner<'a> {
@@ -51,13 +52,18 @@ impl<'a> Scanner<'a> {
             source: s.chars().peekable(),
             tokens: Vec::new(),
             line: 1,
+            block_comment: 0,
         }
     }
 
     pub fn scan_tokens(&mut self) -> &Vec<TokenRef> {
         while let Some(_) = self.source.peek() {
             match self.scan_token() {
-                Some(t) => self.tokens.push(Rc::new(t)),
+                Some(t) => {
+                    if self.block_comment == 0 {
+                        self.tokens.push(Rc::new(t))
+                    }
+                }
                 None => (),
             }
         }
@@ -70,7 +76,15 @@ impl<'a> Scanner<'a> {
     fn scan_token(&mut self) -> Option<Token> {
         let opt_c = self.source.next();
         match opt_c {
-            Some(c) => match c {
+            Some(c) => self.token_from_char(c),
+            None => panic!("peek and next didn't match"),
+        }
+    }
+
+    fn token_from_char(&mut self, c: char) -> Option<Token> {
+        if self.block_comment == 0 {
+            // only look for tokens when we're not in a block comment
+            match c {
                 '(' => Some(Token::new(LeftParen, c.to_string(), Null, self.line)),
                 ')' => Some(Token::new(RightParen, c.to_string(), Null, self.line)),
                 '{' => Some(Token::new(LeftBrace, c.to_string(), Null, self.line)),
@@ -114,6 +128,9 @@ impl<'a> Scanner<'a> {
                         // comment goes until the end of the line
                         while self.source.next_if(|&c| c != '\n').is_some() {}
                         None
+                    } else if self.match_next('*') {
+                        self.block_comment += 1;
+                        None
                     } else {
                         Some(Token::new(Slash, c.to_string(), Null, self.line))
                     }
@@ -133,8 +150,23 @@ impl<'a> Scanner<'a> {
                         None
                     }
                 }
-            },
-            None => panic!("peek and next didn't match"),
+            }
+        } else {
+            // when we're in a block comment, only care about deeper nesting, or exiting the comment
+            match c {
+                '*' => {
+                    if self.match_next('/') {
+                        self.block_comment -= 1;
+                    }
+                }
+                '/' => {
+                    if self.match_next('*') {
+                        self.block_comment += 1;
+                    }
+                }
+                _ => (),
+            }
+            None
         }
     }
 
