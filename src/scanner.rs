@@ -251,3 +251,148 @@ impl<'a> Scanner<'a> {
         Token::new(token_type, id, Null, self.line)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_identifiers() {
+        let source = String::from("foo123 _bar baz_");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Identifier);
+        assert_eq!(tokens[0].lexeme, "foo123");
+        assert_eq!(tokens[1].token_type, Identifier);
+        assert_eq!(tokens[1].lexeme, "_bar");
+        assert_eq!(tokens[2].token_type, Identifier);
+        assert_eq!(tokens[2].lexeme, "baz_");
+    }
+
+    #[test]
+    fn test_keywords() {
+        let source = String::from("if while class true false nil");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, If);
+        assert_eq!(tokens[1].token_type, While);
+        assert_eq!(tokens[2].token_type, Class);
+        assert_eq!(tokens[3].token_type, True);
+        assert_eq!(tokens[4].token_type, False);
+        assert_eq!(tokens[5].token_type, Nil);
+    }
+
+    #[test]
+    fn test_multiline_strings() {
+        let source = String::from("\"hello\nworld\"");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, TString);
+        match &tokens[0].literal {
+            StringLit(s) => assert_eq!(s, "hello\nworld"),
+            _ => panic!("Expected string literal"),
+        }
+        assert_eq!(tokens[0].line, 2);
+        assert_eq!(tokens[1].token_type, Eof);
+        assert_eq!(tokens.len(), 2);
+    }
+
+    #[test]
+    fn test_inlinecomment() {
+        let source = String::from("var x = 42; // this is a comment var x = 3;\nvar x = 4;");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Var);
+        assert_eq!(tokens[1].token_type, Identifier);
+        assert_eq!(tokens[2].token_type, Equal);
+        assert_eq!(tokens[3].token_type, Number);
+        match tokens[3].literal {
+            NumberLit(n) => assert_eq!(n, 42.0),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[4].token_type, Semicolon);
+        assert_eq!(tokens[5].token_type, Var);
+        assert_eq!(tokens[6].token_type, Identifier);
+        assert_eq!(tokens[7].token_type, Equal);
+        assert_eq!(tokens[8].token_type, Number);
+        match tokens[8].literal {
+            NumberLit(n) => assert_eq!(n, 4.0),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[9].token_type, Semicolon);
+        assert_eq!(tokens[10].token_type, Eof);
+        assert_eq!(tokens.len(), 11);
+    }
+
+    #[test]
+    fn test_nested_block_comments_with_code() {
+        let source = String::from("/* outer ;;12!4 blah aw-1-1**{)/* \" */ comment */ 42");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Number);
+        match tokens[0].literal {
+            NumberLit(n) => assert_eq!(n, 42.0),
+            _ => panic!("Expected number literal"),
+        }
+    }
+
+    #[test]
+    fn test_complex_expression() {
+        let source = String::from("var x = (123 + 456) * (789 / 10);");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Var);
+        assert_eq!(tokens[1].token_type, Identifier);
+        assert_eq!(tokens[2].token_type, Equal);
+        assert_eq!(tokens[3].token_type, LeftParen);
+        assert_eq!(tokens[4].token_type, Number);
+        assert_eq!(tokens[5].token_type, Plus);
+        assert_eq!(tokens[6].token_type, Number);
+        assert_eq!(tokens[7].token_type, RightParen);
+        assert_eq!(tokens[8].token_type, Star);
+        assert_eq!(tokens[9].token_type, LeftParen);
+        assert_eq!(tokens[10].token_type, Number);
+        assert_eq!(tokens[11].token_type, Slash);
+        assert_eq!(tokens[12].token_type, Number);
+        assert_eq!(tokens[13].token_type, RightParen);
+        assert_eq!(tokens[14].token_type, Semicolon);
+    }
+
+    #[test]
+    fn test_number_literals() {
+        let source = String::from(".123 456. 789.0123");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        // First token should be a dot followed by a number
+        assert_eq!(tokens[0].token_type, Dot);
+        assert_eq!(tokens[1].token_type, Number);
+        match tokens[1].literal {
+            NumberLit(n) => assert_eq!(n, 123.0),
+            _ => panic!("Expected number literal"),
+        }
+
+        // Second should be a number followed by a dot
+        assert_eq!(tokens[2].token_type, Number);
+        match tokens[2].literal {
+            NumberLit(n) => assert_eq!(n, 456.0),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[3].token_type, Dot);
+
+        // Third should be a number
+        assert_eq!(tokens[4].token_type, Number);
+        match tokens[4].literal {
+            NumberLit(n) => assert_eq!(n, 789.0123),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[5].token_type, Eof);
+        assert_eq!(tokens.len(), 6);
+    }
+}
