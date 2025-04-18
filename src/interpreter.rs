@@ -27,6 +27,86 @@ pub struct Interpreter {
     locals: HashMap<Expr, usize>,
 }
 
+impl Interpreter {
+    pub fn new() -> Self {
+        let globals = Rc::new(RefCell::new(Environment::new()));
+        globals.borrow_mut().define(
+            "clock".to_owned(),
+            CallVal(LoxCallable::from(NativeFunction {
+                name: "clock".to_owned(),
+                arity: 0,
+                call: Box::new(|_, _| {
+                    let now = SystemTime::now();
+                    let duration = now
+                        .duration_since(UNIX_EPOCH)
+                        .expect("Time went backwards.");
+                    let seconds = duration.as_secs() as f64;
+                    Ok(Number(seconds))
+                }),
+            })),
+        );
+        Interpreter {
+            environment: globals.clone(),
+            globals: globals,
+            locals: HashMap::new(),
+        }
+    }
+
+    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), IR> {
+        for stmt in stmts {
+            self.execute(stmt)?;
+        }
+        Ok(())
+    }
+
+    fn execute(&mut self, stmt: &Stmt) -> Result<(), IR> {
+        stmt.accept(self)
+    }
+
+    pub fn resolve(&mut self, expr: Expr, depth: usize) {
+        self.locals.insert(expr, depth);
+    }
+
+    pub fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), IR> {
+        let previous = Rc::clone(&self.environment);
+        self.environment = Rc::new(RefCell::new(env));
+        let result = stmts.iter().try_for_each(|s| self.execute(s));
+        self.environment = previous;
+        result
+    }
+
+    fn lookup_var(&self, name: &TokenRef, expr: &Expr) -> Result<LoxValue, IR> {
+        match self.locals.get(expr) {
+            Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance)
+                .borrow()
+                .get(name),
+            None => self.globals.borrow().get(name),
+        }
+    }
+
+    fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
+        expr.accept(self)
+    }
+
+    fn is_truthy(&self, lv: &LoxValue) -> bool {
+        match lv {
+            Bool(b) => *b,
+            Null => false,
+            _ => true,
+        }
+    }
+
+    fn is_equal(&self, lv: LoxValue, rv: LoxValue) -> bool {
+        match (lv, rv) {
+            (Bool(l), Bool(r)) => l == r,
+            (Number(l), Number(r)) => l == r,
+            (String(l), String(r)) => l == r,
+            (Null, Null) => true,
+            _ => false,
+        }
+    }
+}
+
 impl EVisitor<Result<LoxValue, IR>> for Interpreter {
     fn visit_expr(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
         match expr {
@@ -378,86 +458,6 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                 }
                 Ok(())
             }
-        }
-    }
-}
-
-impl Interpreter {
-    pub fn new() -> Self {
-        let globals = Rc::new(RefCell::new(Environment::new()));
-        globals.borrow_mut().define(
-            "clock".to_owned(),
-            CallVal(LoxCallable::from(NativeFunction {
-                name: "clock".to_owned(),
-                arity: 0,
-                call: Box::new(|_, _| {
-                    let now = SystemTime::now();
-                    let duration = now
-                        .duration_since(UNIX_EPOCH)
-                        .expect("Time went backwards.");
-                    let seconds = duration.as_secs() as f64;
-                    Ok(Number(seconds))
-                }),
-            })),
-        );
-        Interpreter {
-            environment: globals.clone(),
-            globals: globals,
-            locals: HashMap::new(),
-        }
-    }
-
-    pub fn interpret(&mut self, stmts: &Vec<Stmt>) -> Result<(), IR> {
-        for stmt in stmts {
-            self.execute(stmt)?;
-        }
-        Ok(())
-    }
-
-    fn execute(&mut self, stmt: &Stmt) -> Result<(), IR> {
-        stmt.accept(self)
-    }
-
-    pub fn resolve(&mut self, expr: Expr, depth: usize) {
-        self.locals.insert(expr, depth);
-    }
-
-    pub fn execute_block(&mut self, stmts: &Vec<Stmt>, env: Environment) -> Result<(), IR> {
-        let previous = Rc::clone(&self.environment);
-        self.environment = Rc::new(RefCell::new(env));
-        let result = stmts.iter().try_for_each(|s| self.execute(s));
-        self.environment = previous;
-        result
-    }
-
-    fn lookup_var(&self, name: &TokenRef, expr: &Expr) -> Result<LoxValue, IR> {
-        match self.locals.get(expr) {
-            Some(distance) => Environment::ancestor(Rc::clone(&self.environment), *distance)
-                .borrow()
-                .get(name),
-            None => self.globals.borrow().get(name),
-        }
-    }
-
-    fn evaluate(&mut self, expr: &Expr) -> Result<LoxValue, IR> {
-        expr.accept(self)
-    }
-
-    fn is_truthy(&self, lv: &LoxValue) -> bool {
-        match lv {
-            Bool(b) => *b,
-            Null => false,
-            _ => true,
-        }
-    }
-
-    fn is_equal(&self, lv: LoxValue, rv: LoxValue) -> bool {
-        match (lv, rv) {
-            (Bool(l), Bool(r)) => l == r,
-            (Number(l), Number(r)) => l == r,
-            (String(l), String(r)) => l == r,
-            (Null, Null) => true,
-            _ => false,
         }
     }
 }
