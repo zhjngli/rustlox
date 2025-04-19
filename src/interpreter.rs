@@ -32,7 +32,7 @@ impl Interpreter {
         let globals = Rc::new(RefCell::new(Environment::new()));
         globals.borrow_mut().define(
             "clock".to_owned(),
-            CallVal(LoxCallable::from(NativeFunction {
+            Some(CallVal(LoxCallable::from(NativeFunction {
                 name: "clock".to_owned(),
                 arity: 0,
                 call: Box::new(|_, _| {
@@ -43,7 +43,7 @@ impl Interpreter {
                     let seconds = duration.as_secs() as f64;
                     Ok(Number(seconds))
                 }),
-            })),
+            }))),
         );
         Interpreter {
             environment: globals.clone(),
@@ -369,7 +369,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
 
                 self.environment
                     .borrow_mut()
-                    .define(name.lexeme.clone(), Null);
+                    .define(name.lexeme.clone(), Some(Null));
 
                 let prev_env = self.environment.clone();
                 if let Some(s) = superclass.clone() {
@@ -378,7 +378,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     )));
                     self.environment
                         .borrow_mut()
-                        .define("super".to_owned(), CallVal(LoxCallable::LoxClass(*s)));
+                        .define("super".to_owned(), Some(CallVal(LoxCallable::LoxClass(*s))));
                 }
 
                 let mut ms = HashMap::new();
@@ -412,7 +412,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                 let function = LoxFunction::new(f.clone(), Rc::clone(&self.environment), false);
                 self.environment.borrow_mut().define(
                     f.name.lexeme.clone(),
-                    CallVal(LoxCallable::LoxFunction(function)),
+                    Some(CallVal(LoxCallable::LoxFunction(function))),
                 );
                 Ok(())
             }
@@ -442,8 +442,8 @@ impl SVisitor<Result<(), IR>> for Interpreter {
             Stmt::V(VarS { name, initializer }) => {
                 let value;
                 match initializer {
-                    Some(e) => value = self.evaluate(e)?,
-                    None => value = Null,
+                    Some(e) => value = Some(self.evaluate(e)?),
+                    None => value = None,
                 }
                 self.environment
                     .borrow_mut()

@@ -8,7 +8,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Environment {
     enclosing: Option<Rc<RefCell<Environment>>>,
-    values: HashMap<String, LoxValue>,
+    values: HashMap<String, Option<LoxValue>>,
 }
 
 impl Environment {
@@ -55,30 +55,35 @@ impl Environment {
             )))
     }
 
-    pub fn define(&mut self, name: String, value: LoxValue) {
+    pub fn define(&mut self, name: String, value: Option<LoxValue>) {
         self.values.insert(name, value);
     }
 
     pub fn get(&self, name: &TokenRef) -> Result<LoxValue, IR> {
         let var = &name.lexeme;
         if self.values.contains_key(var) {
-            return Ok(self.values.get(var).unwrap().clone());
+            match self.values.get(var).unwrap() {
+                Some(value) => Ok(value.clone()),
+                None => Err(IR::RuntimeError(
+                    name.clone(),
+                    format!("Variable defined but not initialized '{}'.", var),
+                )),
+            }
+        } else {
+            match &self.enclosing {
+                Some(e) => e.borrow().get(name),
+                None => Err(IR::RuntimeError(
+                    name.clone(),
+                    format!("Undefined variable '{}'.", var),
+                )),
+            }
         }
-
-        if let Some(e) = &self.enclosing {
-            return e.borrow().get(name);
-        }
-
-        Err(IR::RuntimeError(
-            name.clone(),
-            format!("Undefined variable '{}'.", var),
-        ))
     }
 
     pub fn assign(&mut self, name: &TokenRef, value: &LoxValue) -> Result<(), IR> {
         let var = &name.lexeme;
         if self.values.contains_key(var) {
-            self.values.insert(var.clone(), value.clone());
+            self.values.insert(var.clone(), Some(value.clone()));
             return Ok(());
         }
 

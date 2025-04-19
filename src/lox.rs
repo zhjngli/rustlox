@@ -119,7 +119,7 @@ impl LoxFunction {
     pub fn bind(&self, instance: Rc<RefCell<LoxInstance>>) -> LoxFunction {
         let env = Rc::new(RefCell::new(Environment::enclosed(self.closure.clone())));
         env.borrow_mut()
-            .define("this".to_owned(), LoxValue::ClassInstance(instance));
+            .define("this".to_owned(), Some(LoxValue::ClassInstance(instance)));
         LoxFunction::new(self.declaration.clone(), env, self.is_initializer)
     }
 }
@@ -138,7 +138,7 @@ impl Callable for LoxFunction {
             .iter()
             .enumerate()
             .for_each(|(i, param)| {
-                environment.define(param.lexeme.clone(), args.get(i).unwrap().clone());
+                environment.define(param.lexeme.clone(), Some(args.get(i).unwrap().clone()));
             });
         let result = interpreter.execute_block(&self.declaration.body, environment.to_owned());
         match result {
