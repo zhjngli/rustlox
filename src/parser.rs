@@ -19,19 +19,26 @@ use crate::{
 pub struct Parser<'a> {
     tokens: &'a Vec<TokenRef>,
     current: usize,
+    repl: bool,
 }
 
 #[derive(Debug)]
 pub struct ParseError;
 
-fn parse_error(token: &TokenRef, message: &str) -> ParseError {
-    crate::report_token_error(token, message);
+fn parse_error(token: &TokenRef, message: &str, repl: bool) -> ParseError {
+    if !repl {
+        crate::report_token_error(token, message)
+    };
     ParseError {}
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(tokens: &'a Vec<TokenRef>) -> Self {
-        Parser { tokens, current: 0 }
+    pub fn new(tokens: &'a Vec<TokenRef>, repl: bool) -> Self {
+        Parser {
+            tokens,
+            current: 0,
+            repl,
+        }
     }
 
     pub fn parse(&mut self) -> Result<Vec<Stmt>, ParseError> {
@@ -41,6 +48,29 @@ impl<'a> Parser<'a> {
             match self.declaration() {
                 Ok(s) => stmts.push(s),
                 Err(_) => error = true,
+            }
+        }
+        if error {
+            Err(ParseError {})
+        } else {
+            Ok(stmts)
+        }
+    }
+
+    pub fn parse_repl(&mut self) -> Result<Vec<Stmt>, ParseError> {
+        let mut stmts = Vec::new();
+        let mut error = false;
+        while !self.is_at_end() && error == false {
+            let prev_i = self.current;
+            match self.declaration() {
+                Ok(s) => stmts.push(s),
+                Err(_) => {
+                    self.current = prev_i;
+                    match self.expression() {
+                        Ok(e) => stmts.push(Stmt::P(PrintS { expr: e })),
+                        Err(_) => error = true,
+                    }
+                }
             }
         }
         if error {
@@ -219,7 +249,7 @@ impl<'a> Parser<'a> {
     fn expression_statement(&mut self) -> Result<ExprS, ParseError> {
         let expr = self.expression()?;
         self.consume(&Semicolon, "Expect ';' after expression.")?;
-        Ok(ExprS { expr: expr })
+        Ok(ExprS { expr })
     }
 
     fn function(&mut self, kind: &str) -> Result<FunctionS, ParseError> {
@@ -235,6 +265,7 @@ impl<'a> Parser<'a> {
                     return Err(parse_error(
                         self.peek(),
                         "Can't have more than 255 parameters.",
+                        self.repl,
                     ));
                 }
                 let param = self.consume(&Identifier, "Expect parameter name.")?;
@@ -275,7 +306,7 @@ impl<'a> Parser<'a> {
                     return Ok(Expr::S(SetE::new(*object, name.clone(), value)))
                 }
                 _ => {
-                    parse_error(&equals, "Invalid assignment target.");
+                    parse_error(&equals, "Invalid assignment target.", self.repl);
                 }
             }
         }
@@ -363,7 +394,11 @@ impl<'a> Parser<'a> {
             args.push(self.expression()?);
             while self.match_next(&[Comma]) {
                 if args.len() >= 255 {
-                    parse_error(self.peek(), "Can't have more than 255 arguments.");
+                    parse_error(
+                        self.peek(),
+                        "Can't have more than 255 arguments.",
+                        self.repl,
+                    );
                 }
                 args.push(self.expression()?);
             }
@@ -402,7 +437,7 @@ impl<'a> Parser<'a> {
             return Ok(Expr::Gr(GroupingE::new(expr)));
         }
 
-        Err(parse_error(self.peek(), "Expect expression."))
+        Err(parse_error(self.peek(), "Expect expression.", self.repl))
     }
 
     fn match_next(&mut self, token_types: &[TokenType]) -> bool {
@@ -419,7 +454,7 @@ impl<'a> Parser<'a> {
         if self.check(token_type) {
             Ok(self.advance())
         } else {
-            Err(parse_error(self.peek(), message))
+            Err(parse_error(self.peek(), message, self.repl))
         }
     }
 

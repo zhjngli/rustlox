@@ -25,10 +25,11 @@ pub struct Interpreter {
     environment: Rc<RefCell<Environment>>,
     pub globals: Rc<RefCell<Environment>>,
     locals: HashMap<Expr, usize>,
+    repl: bool,
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
+    pub fn new(repl: bool) -> Self {
         let globals = Rc::new(RefCell::new(Environment::new()));
         globals.borrow_mut().define(
             "clock".to_owned(),
@@ -49,6 +50,7 @@ impl Interpreter {
             environment: globals.clone(),
             globals: globals,
             locals: HashMap::new(),
+            repl,
         }
     }
 
@@ -405,7 +407,10 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                 Ok(())
             }
             Stmt::E(ExprS { expr }) => {
-                self.evaluate(expr)?;
+                let val = self.evaluate(expr)?;
+                if self.repl {
+                    println!("{}", val);
+                }
                 Ok(())
             }
             Stmt::F(f) => {

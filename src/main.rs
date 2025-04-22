@@ -30,7 +30,7 @@ fn main() {
     match if args.len() == 2 {
         lox.run_file(&args[1])
     } else {
-        lox.run_prompt()
+        lox.run_repl()
     } {
         Ok(()) => (),
         Err(Exits::Other(e)) => {
@@ -83,45 +83,58 @@ impl Lox {
     }
 
     fn run_file(&self, f: &String) -> Result<(), Exits> {
-        // self.run(fs::read_to_string(f)?)
         match fs::read_to_string(f) {
             Ok(s) => self.run(s),
             Err(e) => Err(Exits::Other(e)),
         }
     }
 
-    fn run_prompt(&self) -> Result<(), Exits> {
+    fn run_repl(&self) -> Result<(), Exits> {
+        let mut interpreter = Interpreter::new(true);
         loop {
             print!("> ");
             stdout().flush().unwrap();
+
+            // read buffer until parseable
             let mut buffer = String::new();
-            match stdin().read_line(&mut buffer) {
-                Ok(_) => (),
-                Err(e) => return Err(Exits::Other(e)),
-            };
-            if buffer.trim().is_empty() {
-                break;
-            } else {
-                match self.run(buffer.clone()) {
-                    Ok(()) => continue,
-                    Err(Exits::Other(e)) => {
-                        eprintln!("{}", e);
+            let stmts;
+            loop {
+                match stdin().read_line(&mut buffer) {
+                    Ok(_) => (),
+                    Err(e) => return Err(Exits::Other(e)),
+                };
+                let mut scanner = Scanner::new(&buffer);
+                let tokens = scanner.scan_tokens();
+                let mut parser = Parser::new(tokens, true);
+                let stmts_result = parser.parse_repl();
+                match stmts_result {
+                    Ok(r) => {
+                        stmts = r;
+                        break;
                     }
-                    Err(Exits::PE(e)) => {
-                        eprintln!("{:?}", e);
-                    }
-                    Err(Exits::SE(e)) => {
-                        eprintln!("{:?}", e);
-                    }
-                    Err(Exits::IR(IR::RuntimeError(t, m))) => {
-                        eprint!("Runtime Error: ");
-                        report_token_error(&t, &m);
-                    }
-                    Err(Exits::IR(IR::Return(v))) => println!("result: {:?}", v),
+                    Err(_) => continue,
                 }
             }
+
+            // interpret parsed statements
+            let mut resolver = Resolver::new(&mut interpreter);
+            match resolver.resolve(&stmts) {
+                Ok(()) => (),
+                Err(e) => {
+                    eprintln!("{:?}", e);
+                    continue;
+                }
+            };
+
+            match interpreter.interpret(&stmts) {
+                Ok(()) => (),
+                Err(IR::RuntimeError(t, m)) => {
+                    eprint!("Runtime Error: ");
+                    report_token_error(&t, &m);
+                }
+                Err(IR::Return(v)) => println!("{}", v),
+            }
         }
-        Ok(())
     }
 
     fn run(&self, s: String) -> Result<(), Exits> {
@@ -133,7 +146,7 @@ impl Lox {
         //     println!("{:?}", t);
         // });
 
-        let mut parser = Parser::new(tokens);
+        let mut parser = Parser::new(tokens, false);
         let stmts_result = parser.parse();
         let stmts;
         match stmts_result {
@@ -145,7 +158,7 @@ impl Lox {
         //     println!("{:?}", s);
         // });
 
-        let mut interpreter = Interpreter::new();
+        let mut interpreter = Interpreter::new(false);
         let mut resolver = Resolver::new(&mut interpreter);
         match resolver.resolve(&stmts) {
             Ok(()) => (),
