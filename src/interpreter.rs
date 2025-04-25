@@ -241,7 +241,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 let object = self.evaluate(object)?;
                 match object {
                     ClassInstance(i) => {
-                        let val = i.borrow().get(name)?;
+                        let val = i.borrow().get(name, i.clone())?;
                         match val {
                             CallVal(LoxCallable::LoxFunction(f)) if f.is_getter() => {
                                 f.call(self, vec![])

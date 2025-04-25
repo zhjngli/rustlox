@@ -235,12 +235,12 @@ impl LoxInstance {
         }
     }
 
-    pub fn get(&self, name: &TokenRef) -> Result<LoxValue, IR> {
+    pub fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<LoxInstance>>) -> Result<LoxValue, IR> {
         if let Some(v) = self.fields.get(&name.lexeme) {
             Ok(v.clone())
         } else if let Some(m) = self.class.find_method(&name.lexeme) {
             Ok(LoxValue::CallVal(LoxCallable::LoxFunction(
-                m.bind(Rc::new(RefCell::new(self.clone()))),
+                m.bind(self_ref),
             )))
         } else {
             Err(IR::RuntimeError(

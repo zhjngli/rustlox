@@ -115,6 +115,16 @@ mod classes {
             "[line 1] Error at 'this': Can't use 'this' outside of a class.\nStaticError\n",
         );
     }
+
+    #[test]
+    fn test_this_setter_method() {
+        test_lox_script(
+            "classes_this_setter_method.lox",
+            ErrorType::None,
+            "1\n2\n",
+            "",
+        );
+    }
 }
 
 mod comments {

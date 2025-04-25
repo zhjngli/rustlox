@@ -1,0 +1,21 @@
+class Foo {
+    init(v) {
+        this.val = v;
+    }
+
+    // no point of doing this in Lox since you can access fields directly
+    // but it's helpful to verify when the method is bound to the instance,
+    // `this` refers to the correct instance
+    updateVal(v) {
+        this.val = v;
+    }
+
+    val {
+        return this.val;
+    }
+}
+
+var f = Foo(1);
+print f.val;
+f.updateVal(2);
+print f.val;
