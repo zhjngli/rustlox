@@ -975,10 +975,7 @@ mod tests {
             vec![],
         ));
 
-        let get_value_expr = Expr::G(GetE::new(
-            call_class_expr,
-            getter_name.clone(),
-        ));
+        let get_value_expr = Expr::G(GetE::new(call_class_expr, getter_name.clone()));
 
         let result = interpreter.evaluate(&get_value_expr).unwrap();
         assert!(matches!(result, LoxValue::Number(_)));
