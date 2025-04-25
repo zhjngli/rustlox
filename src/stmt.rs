@@ -6,6 +6,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub enum Stmt {
     B(BlockS),
+    Br(BreakS),
     C(ClassS),
     E(ExprS),
     F(FunctionS),
@@ -19,6 +20,11 @@ pub enum Stmt {
 #[derive(Debug, Clone)]
 pub struct BlockS {
     pub stmts: Vec<Stmt>,
+}
+
+#[derive(Debug, Clone)]
+pub struct BreakS {
+    pub keyword: TokenRef,
 }
 
 #[derive(Debug, Clone)]

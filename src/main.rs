@@ -51,6 +51,9 @@ fn main() {
             process::exit(70); // EX_SOFTWARE
         }
         Err(Exits::IR(IR::Return(v))) => println!("result: {:?}", v),
+        Err(Exits::IR(IR::BreakException)) => {
+            panic!("Should always catch break exception while executing a loop statement.")
+        }
     }
 }
 
@@ -133,18 +136,16 @@ impl Lox {
                     report_token_error(&t, &m);
                 }
                 Err(IR::Return(v)) => println!("{}", v),
+                Err(IR::BreakException) => {
+                    panic!("Should always catch break exception while executing a loop statement.")
+                }
             }
         }
     }
 
     fn run(&self, s: String) -> Result<(), Exits> {
-        // println!("string: {:?}\n", s);
-
         let mut scanner = Scanner::new(&s);
         let tokens = scanner.scan_tokens();
-        // tokens.iter().for_each(|t| {
-        //     println!("{:?}", t);
-        // });
 
         let mut parser = Parser::new(tokens, false);
         let stmts_result = parser.parse();
@@ -153,10 +154,6 @@ impl Lox {
             Ok(r) => stmts = r,
             Err(e) => return Err(Exits::PE(e)),
         }
-        // println!();
-        // stmts.iter().for_each(|s| {
-        //     println!("{:?}", s);
-        // });
 
         let mut interpreter = Interpreter::new(false);
         let mut resolver = Resolver::new(&mut interpreter);

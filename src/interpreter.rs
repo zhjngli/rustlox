@@ -16,7 +16,10 @@ use crate::{
         LoxValue::{self, Bool, CallVal, ClassInstance, Null, Number, String},
         NativeFunction,
     },
-    stmt::{BlockS, ClassS, ExprS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor, WhileS},
+    stmt::{
+        BlockS, BreakS, ClassS, ExprS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor,
+        WhileS,
+    },
     token::{TokenLiteral, TokenRef, TokenType},
 };
 
@@ -48,7 +51,7 @@ impl Interpreter {
         );
         Interpreter {
             environment: globals.clone(),
-            globals: globals,
+            globals,
             locals: HashMap::new(),
             repl,
         }
@@ -348,6 +351,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
             Stmt::B(BlockS { stmts }) => {
                 self.execute_block(stmts, Environment::enclosed(Rc::clone(&self.environment)))
             }
+            Stmt::Br(BreakS { keyword: _ }) => Err(IR::BreakException),
             Stmt::C(ClassS {
                 name,
                 superclass: superclass_expr,
@@ -458,7 +462,11 @@ impl SVisitor<Result<(), IR>> for Interpreter {
             Stmt::W(WhileS { condition, body }) => {
                 let mut cond = self.evaluate(condition)?;
                 while self.is_truthy(&cond) {
-                    self.execute(body)?;
+                    match self.execute(body) {
+                        Err(IR::BreakException) => break,
+                        Err(e) => return Err(e),
+                        Ok(()) => (),
+                    }
                     cond = self.evaluate(condition)?;
                 }
                 Ok(())
@@ -466,6 +474,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -863,6 +872,68 @@ mod tests {
         assert!(matches!(x_value, LoxValue::Number(_)));
         if let LoxValue::Number(n) = x_value {
             assert_eq!(n, 3.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_while_with_break_statement() {
+        let mut interpreter = Interpreter::new(false);
+
+        interpreter
+            .environment
+            .borrow_mut()
+            .define("x".to_owned(), Some(LoxValue::Number(0.0)));
+
+        let stmt = Stmt::W(WhileS {
+            condition: Expr::B(BinaryE::new(
+                Expr::V(VariableE::new(create_token(
+                    TokenType::Identifier,
+                    "x",
+                    TokenLiteral::Null,
+                    1,
+                ))),
+                create_token(TokenType::Less, "<", TokenLiteral::Null, 1),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(5.0))),
+            )),
+            body: Box::new(Stmt::B(BlockS {
+                stmts: vec![
+                    Stmt::E(ExprS {
+                        expr: Expr::A(AssignE::new(
+                            create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
+                            Expr::B(BinaryE::new(
+                                Expr::V(VariableE::new(create_token(
+                                    TokenType::Identifier,
+                                    "x",
+                                    TokenLiteral::Null,
+                                    1,
+                                ))),
+                                create_token(TokenType::Plus, "+", TokenLiteral::Null, 1),
+                                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+                            )),
+                        )),
+                    }),
+                    Stmt::Br(BreakS {
+                        keyword: create_token(TokenType::Break, "break", TokenLiteral::Null, 1),
+                    }),
+                ],
+            })),
+        });
+
+        interpreter.execute(&stmt).unwrap();
+
+        let x_value = interpreter
+            .environment
+            .borrow()
+            .get(&create_token(
+                TokenType::Identifier,
+                "x",
+                TokenLiteral::Null,
+                1,
+            ))
+            .unwrap();
+        assert!(matches!(x_value, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = x_value {
+            assert_eq!(n, 1.0);
         }
     }
 }

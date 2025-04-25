@@ -3,14 +3,14 @@ use crate::{
         AssignE, BinaryE, CallE, Expr, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE, ThisE,
         UnaryE, VariableE,
     },
-    stmt::{BlockS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, WhileS},
+    stmt::{BlockS, BreakS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, WhileS},
     token::{
         TokenLiteral, TokenRef,
         TokenType::{
-            self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
-            For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
-            Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
-            Star, String as TString, Super, This, True, Var, While,
+            self, And, Bang, BangEqual, Break, Class, Comma, Dot, Else, Eof, Equal, EqualEqual,
+            False, For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less,
+            LessEqual, Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen,
+            Semicolon, Slash, Star, String as TString, Super, This, True, Var, While,
         },
     },
 };
@@ -19,6 +19,7 @@ use crate::{
 pub struct Parser<'a> {
     tokens: &'a Vec<TokenRef>,
     current: usize,
+    loop_depth: usize,
     repl: bool,
 }
 
@@ -37,6 +38,7 @@ impl<'a> Parser<'a> {
         Parser {
             tokens,
             current: 0,
+            loop_depth: 0,
             repl,
         }
     }
@@ -136,6 +138,9 @@ impl<'a> Parser<'a> {
         if self.match_next(&[Print]) {
             return Ok(Stmt::P(self.print_statement()?));
         }
+        if self.match_next(&[Break]) {
+            return Ok(Stmt::Br(self.break_statement()?));
+        }
         if self.match_next(&[Return]) {
             return Ok(Stmt::R(self.return_statement()?));
         }
@@ -173,6 +178,7 @@ impl<'a> Parser<'a> {
         };
         self.consume(&RightParen, "Expect ')' after for clauses.")?;
 
+        self.loop_depth += 1;
         let mut body = self.statement()?;
         if let Some(inc) = increment {
             body = Stmt::B(BlockS {
@@ -188,6 +194,7 @@ impl<'a> Parser<'a> {
                 stmts: vec![init, body],
             });
         }
+        self.loop_depth -= 1;
 
         Ok(body)
     }
@@ -213,6 +220,19 @@ impl<'a> Parser<'a> {
         let value = self.expression()?;
         self.consume(&Semicolon, "Expect ';' after value.")?;
         Ok(PrintS { expr: value })
+    }
+
+    fn break_statement(&mut self) -> Result<BreakS, ParseError> {
+        if self.loop_depth == 0 {
+            return Err(parse_error(
+                self.peek(),
+                "'break' statement not inside a loop.",
+                self.repl,
+            ));
+        }
+        let keyword = self.previous().clone();
+        self.consume(&Semicolon, "Expect ';' after break.")?;
+        Ok(BreakS { keyword })
     }
 
     fn return_statement(&mut self) -> Result<ReturnS, ParseError> {
@@ -241,7 +261,10 @@ impl<'a> Parser<'a> {
         self.consume(&LeftParen, "Expect '(' after 'while'.")?;
         let condition = self.expression()?;
         self.consume(&RightParen, "Expect ')' after condition")?;
+
+        self.loop_depth += 1;
         let body = Box::new(self.statement()?);
+        self.loop_depth -= 1;
 
         Ok(WhileS { condition, body })
     }
@@ -1229,6 +1252,51 @@ mod tests {
             create_token(LeftParen, "(", TokenLiteral::Null, 1),
             create_token(RightParen, ")", TokenLiteral::Null, 1),
             create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_break_statement_in_loop() {
+        let tokens = vec![
+            create_token(While, "while", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Break, "break", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::W(_)));
+        if let Stmt::W(while_stmt) = &stmts[0] {
+            assert!(matches!(&*while_stmt.body, Stmt::B(_)));
+            if let Stmt::B(block_stmt) = &*while_stmt.body {
+                assert_eq!(block_stmt.stmts.len(), 1);
+                assert!(matches!(&block_stmt.stmts[0], Stmt::Br(_)));
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_break_statement_outside_loop() {
+        let tokens = vec![
+            create_token(Break, "break", TokenLiteral::Null, 1),
             create_token(Semicolon, ";", TokenLiteral::Null, 1),
             create_token(Eof, "", TokenLiteral::Null, 1),
         ];

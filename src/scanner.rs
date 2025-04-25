@@ -6,16 +6,17 @@ use crate::token::{
     TokenLiteral::{Null, NumberLit, StringLit},
     TokenRef,
     TokenType::{
-        self, And, Bang, BangEqual, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False, For,
-        Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual, Minus,
-        Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash, Star,
-        String as TString, Super, This, True, Var, While,
+        self, And, Bang, BangEqual, Break, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
+        For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
+        Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
+        Star, String as TString, Super, This, True, Var, While,
     },
 };
 
 static KEYWORDS: Lazy<HashMap<String, TokenType>> = Lazy::new(|| {
     let mut m = HashMap::new();
     m.insert("and".to_string(), And);
+    m.insert("break".to_string(), Break);
     m.insert("class".to_string(), Class);
     m.insert("else".to_string(), Else);
     m.insert("false".to_string(), False);

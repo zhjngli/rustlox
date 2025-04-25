@@ -1,0 +1,15 @@
+for (var i = 0; i < 12; i = i + 1) {
+    var sum = 0;
+    var broke = false;
+    for (var j = 0; j < i; j = j + 1) {
+        sum = sum + j;
+        if (sum > 50) {
+            broke = true;
+            break;
+        }
+    }
+    if (broke) {
+        print i;
+        print sum;
+    }
+}

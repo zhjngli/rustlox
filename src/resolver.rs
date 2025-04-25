@@ -7,8 +7,8 @@ use crate::{
     },
     interpreter::Interpreter,
     stmt::{
-        BlockS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor,
-        WhileS,
+        BlockS, BreakS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS,
+        Visitor as SVisitor, WhileS,
     },
     token::TokenRef,
 };
@@ -221,6 +221,7 @@ impl<'a> SVisitor<Result<(), StaticError>> for Resolver<'a> {
                 self.end_scope();
                 Ok(())
             }
+            Stmt::Br(BreakS { keyword: _ }) => Ok(()),
             Stmt::C(ClassS {
                 name,
                 superclass,

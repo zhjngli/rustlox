@@ -122,12 +122,22 @@ mod control_flow {
     use crate::ErrorType;
 
     #[test]
-    fn test_print_truthy() {
+    fn test_break_early_fibonacci() {
         test_lox_script(
-            "control_flow_print_truthy.lox",
+            "control_flow_break_early_fibonacci.lox",
             ErrorType::None,
-            "hi\nyes\n",
+            "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n",
             "",
+        );
+    }
+
+    #[test]
+    fn test_break_outside_loop() {
+        test_lox_script(
+            "control_flow_break_outside_loop.lox",
+            ErrorType::StaticError,
+            "",
+            "[line 3] Error at ';': 'break' statement not inside a loop.\nParseError\n",
         );
     }
 
@@ -137,6 +147,26 @@ mod control_flow {
             "control_flow_for_loop_fibonacci.lox",
             ErrorType::None,
             "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n",
+            "",
+        );
+    }
+
+    #[test]
+    fn test_nested_loop_break() {
+        test_lox_script(
+            "control_flow_nested_loop_break.lox",
+            ErrorType::None,
+            "11\n55\n",
+            "",
+        );
+    }
+
+    #[test]
+    fn test_print_truthy() {
+        test_lox_script(
+            "control_flow_print_truthy.lox",
+            ErrorType::None,
+            "hi\nyes\n",
             "",
         );
     }

@@ -1,0 +1,9 @@
+var i = 0;
+var j = 1;
+while (true) {
+    if (i > 100) break;
+    print i;
+    var temp = j;
+    j = i + j;
+    i = temp;
+}

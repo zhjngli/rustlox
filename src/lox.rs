@@ -34,6 +34,7 @@ impl Display for LoxValue {
 
 #[derive(Debug)]
 pub enum InterpreterResult {
+    BreakException,
     RuntimeError(TokenRef, String),
     Return(LoxValue),
 }
