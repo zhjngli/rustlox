@@ -1,0 +1,11 @@
+var pi = 3.14;
+var r = 4;
+var area = pi * r * r;
+print area;
+
+pi = 22 / 7;
+r = 4;
+area = pi * r * r;
+print area;
+
+print 4 - 3 + 2 - 1;

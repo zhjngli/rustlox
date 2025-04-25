@@ -54,7 +54,7 @@ pub enum TokenType {
     Eof,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum TokenLiteral {
     NumberLit(f64),
     Bool(bool),

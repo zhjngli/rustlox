@@ -1,0 +1,6 @@
+fun add(a, b, c) {
+  print a + b + c;
+}
+
+add(1, 2, 3, 4); // Runtime Error: [line 5] Error at ')': Expected 3 arguments but got 4.
+add(1, 2);       // Runtime Error: [line 6] Error at ')': Expected 3 arguments but got 2.

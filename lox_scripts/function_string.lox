@@ -1,0 +1,1 @@
+"totally not a function"(); // Runtime Error: [line 1] Error at ')': Can only call functions and classes

@@ -1,0 +1,15 @@
+class Foo {
+    init(b) {
+        if (b) {
+            this.bar = "truthy val passed in";
+            return;
+        }
+        this.bar = "no truthy val passed in";
+    }
+}
+
+var t = Foo(true);
+print t.bar;
+
+var f = Foo(nil);
+print f.bar;

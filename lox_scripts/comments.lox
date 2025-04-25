@@ -1,0 +1,11 @@
+/*
+nested block comment
+
+blahb;;aweof"<><$!>^>?@@^?>62/.,6/,/.a,asdf0
+asfawq2t16#%?&""""""'''I$^:q{{}Q{}~     ?R@T{GW9019....**18171(lah 
+/*
+*/
+does this still work
+*/
+
+print "comments!"; // inline comment

@@ -38,6 +38,7 @@ fn report_lex_error(line: usize, message: &str) {
     crate::print_error(line, "", message)
 }
 
+// TODO: scanner error if it doesn't finish parsing a block comment?
 #[derive(Debug)]
 pub struct Scanner<'a> {
     source: Peekable<Chars<'a>>,

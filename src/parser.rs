@@ -500,3 +500,137 @@ impl<'a> Parser<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::token::Token;
+
+    use super::*;
+
+    fn create_token(
+        token_type: TokenType,
+        lexeme: &str,
+        literal: TokenLiteral,
+        line: usize,
+    ) -> TokenRef {
+        TokenRef::new(Token {
+            token_type,
+            lexeme: lexeme.to_string(),
+            literal,
+            line,
+        })
+    }
+
+    #[test]
+    fn test_parse_var_declaration() {
+        let tokens = vec![
+            create_token(TokenType::Var, "var", TokenLiteral::Null, 1),
+            create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
+            create_token(TokenType::Equal, "=", TokenLiteral::Null, 1),
+            create_token(TokenType::Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(TokenType::Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        if let Stmt::V(var_stmt) = &stmts[0] {
+            assert_eq!(var_stmt.name.lexeme, "x");
+            if let Some(Expr::Li(literal)) = &var_stmt.initializer {
+                assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+            } else {
+                panic!("Expected a literal initializer");
+            }
+        } else {
+            panic!("Expected a variable declaration statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_expression_statement() {
+        let tokens = vec![
+            create_token(TokenType::Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(TokenType::Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            if let Expr::Li(literal) = &expr_stmt.expr {
+                assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+            } else {
+                panic!("Expected a literal expression");
+            }
+        } else {
+            panic!("Expected an expression statement");
+        }
+    }
+
+    #[test]
+    fn test_parse_if_statement() {
+        let tokens = vec![
+            create_token(TokenType::If, "if", TokenLiteral::Null, 1),
+            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(TokenType::True, "true", TokenLiteral::Bool(true), 1),
+            create_token(TokenType::RightParen, ")", TokenLiteral::Null, 1),
+            create_token(TokenType::Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(TokenType::Else, "else", TokenLiteral::Null, 1),
+            create_token(TokenType::Number, "0", TokenLiteral::NumberLit(0.0), 1),
+            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(TokenType::Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        if let Stmt::I(if_stmt) = &stmts[0] {
+            if let Expr::Li(condition) = &if_stmt.condition {
+                assert_eq!(condition.value, TokenLiteral::Bool(true));
+            } else {
+                panic!("Expected a literal condition");
+            }
+
+            if let Stmt::E(then_branch) = &*if_stmt.then_branch {
+                if let Expr::Li(literal) = &then_branch.expr {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                } else {
+                    panic!("Expected a literal in then branch");
+                }
+            } else {
+                panic!("Expected an expression statement in then branch");
+            }
+
+            if let Some(else_branch) = &if_stmt.else_branch {
+                if let Stmt::E(else_stmt) = &**else_branch {
+                    if let Expr::Li(literal) = &else_stmt.expr {
+                        assert_eq!(literal.value, TokenLiteral::NumberLit(0.0));
+                    } else {
+                        panic!("Expected a literal in else branch");
+                    }
+                } else {
+                    panic!("Expected an expression statement in else branch");
+                }
+            } else {
+                panic!("Expected an else branch");
+            }
+        } else {
+            panic!("Expected an if statement");
+        }
+    }
+}
