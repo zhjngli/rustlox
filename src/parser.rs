@@ -524,12 +524,12 @@ mod tests {
     #[test]
     fn test_parse_var_declaration() {
         let tokens = vec![
-            create_token(TokenType::Var, "var", TokenLiteral::Null, 1),
-            create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
-            create_token(TokenType::Equal, "=", TokenLiteral::Null, 1),
-            create_token(TokenType::Number, "42", TokenLiteral::NumberLit(42.0), 1),
-            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
-            create_token(TokenType::Eof, "", TokenLiteral::Null, 1),
+            create_token(Var, "var", TokenLiteral::Null, 1),
+            create_token(Identifier, "x", TokenLiteral::Null, 1),
+            create_token(Equal, "=", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
         ];
 
         let mut parser = Parser::new(&tokens, false);
@@ -539,24 +539,23 @@ mod tests {
         let stmts = result.unwrap();
         assert_eq!(stmts.len(), 1);
 
+        assert!(matches!(&stmts[0], Stmt::V(_)));
         if let Stmt::V(var_stmt) = &stmts[0] {
             assert_eq!(var_stmt.name.lexeme, "x");
+
+            assert!(var_stmt.initializer.is_some());
             if let Some(Expr::Li(literal)) = &var_stmt.initializer {
                 assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
-            } else {
-                panic!("Expected a literal initializer");
             }
-        } else {
-            panic!("Expected a variable declaration statement");
         }
     }
 
     #[test]
     fn test_parse_expression_statement() {
         let tokens = vec![
-            create_token(TokenType::Number, "42", TokenLiteral::NumberLit(42.0), 1),
-            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
-            create_token(TokenType::Eof, "", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
         ];
 
         let mut parser = Parser::new(&tokens, false);
@@ -566,30 +565,28 @@ mod tests {
         let stmts = result.unwrap();
         assert_eq!(stmts.len(), 1);
 
+        assert!(matches!(&stmts[0], Stmt::E(_)));
         if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::Li(_)));
             if let Expr::Li(literal) = &expr_stmt.expr {
                 assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
-            } else {
-                panic!("Expected a literal expression");
             }
-        } else {
-            panic!("Expected an expression statement");
         }
     }
 
     #[test]
     fn test_parse_if_statement() {
         let tokens = vec![
-            create_token(TokenType::If, "if", TokenLiteral::Null, 1),
-            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
-            create_token(TokenType::True, "true", TokenLiteral::Bool(true), 1),
-            create_token(TokenType::RightParen, ")", TokenLiteral::Null, 1),
-            create_token(TokenType::Number, "42", TokenLiteral::NumberLit(42.0), 1),
-            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
-            create_token(TokenType::Else, "else", TokenLiteral::Null, 1),
-            create_token(TokenType::Number, "0", TokenLiteral::NumberLit(0.0), 1),
-            create_token(TokenType::Semicolon, ";", TokenLiteral::Null, 1),
-            create_token(TokenType::Eof, "", TokenLiteral::Null, 1),
+            create_token(If, "if", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Else, "else", TokenLiteral::Null, 1),
+            create_token(Number, "0", TokenLiteral::NumberLit(0.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
         ];
 
         let mut parser = Parser::new(&tokens, false);
@@ -599,38 +596,646 @@ mod tests {
         let stmts = result.unwrap();
         assert_eq!(stmts.len(), 1);
 
+        assert!(matches!(&stmts[0], Stmt::I(_)));
         if let Stmt::I(if_stmt) = &stmts[0] {
+            assert!(matches!(if_stmt.condition, Expr::Li(_)));
             if let Expr::Li(condition) = &if_stmt.condition {
                 assert_eq!(condition.value, TokenLiteral::Bool(true));
-            } else {
-                panic!("Expected a literal condition");
             }
 
+            assert!(matches!(&*if_stmt.then_branch, Stmt::E(_)));
             if let Stmt::E(then_branch) = &*if_stmt.then_branch {
+                assert!(matches!(then_branch.expr, Expr::Li(_)));
                 if let Expr::Li(literal) = &then_branch.expr {
                     assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
-                } else {
-                    panic!("Expected a literal in then branch");
                 }
-            } else {
-                panic!("Expected an expression statement in then branch");
             }
 
+            assert!(if_stmt.else_branch.is_some());
             if let Some(else_branch) = &if_stmt.else_branch {
+                assert!(matches!(&**else_branch, Stmt::E(_)));
                 if let Stmt::E(else_stmt) = &**else_branch {
+                    assert!(matches!(else_stmt.expr, Expr::Li(_)));
                     if let Expr::Li(literal) = &else_stmt.expr {
                         assert_eq!(literal.value, TokenLiteral::NumberLit(0.0));
-                    } else {
-                        panic!("Expected a literal in else branch");
                     }
-                } else {
-                    panic!("Expected an expression statement in else branch");
                 }
-            } else {
-                panic!("Expected an else branch");
             }
-        } else {
-            panic!("Expected an if statement");
         }
+    }
+
+    #[test]
+    fn test_parse_while_statement() {
+        let tokens = vec![
+            create_token(While, "while", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::W(_)));
+        if let Stmt::W(while_stmt) = &stmts[0] {
+            assert!(matches!(while_stmt.condition, Expr::Li(_)));
+            if let Expr::Li(condition) = &while_stmt.condition {
+                assert_eq!(condition.value, TokenLiteral::Bool(true));
+            }
+
+            assert!(matches!(&*while_stmt.body, Stmt::E(_)));
+            if let Stmt::E(body_stmt) = &*while_stmt.body {
+                assert!(matches!(body_stmt.expr, Expr::Li(_)));
+                if let Expr::Li(literal) = &body_stmt.expr {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_block_statement() {
+        let tokens = vec![
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::B(_)));
+        if let Stmt::B(block_stmt) = &stmts[0] {
+            assert_eq!(block_stmt.stmts.len(), 1);
+
+            assert!(matches!(&block_stmt.stmts[0], Stmt::E(_)));
+            if let Stmt::E(expr_stmt) = &block_stmt.stmts[0] {
+                assert!(matches!(expr_stmt.expr, Expr::Li(_)));
+                if let Expr::Li(literal) = &expr_stmt.expr {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_logical_expression() {
+        let tokens = vec![
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(Or, "or", TokenLiteral::Null, 1),
+            create_token(False, "false", TokenLiteral::Bool(false), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::Lo(_)));
+            if let Expr::Lo(logical_expr) = &expr_stmt.expr {
+                assert!(matches!(*logical_expr.left, Expr::Li(_)));
+                if let Expr::Li(left_literal) = &*logical_expr.left {
+                    assert_eq!(left_literal.value, TokenLiteral::Bool(true));
+                }
+
+                assert!(matches!(*logical_expr.right, Expr::Li(_)));
+                if let Expr::Li(right_literal) = &*logical_expr.right {
+                    assert_eq!(right_literal.value, TokenLiteral::Bool(false));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_binary_expression() {
+        let tokens = vec![
+            create_token(Number, "1", TokenLiteral::NumberLit(1.0), 1),
+            create_token(Plus, "+", TokenLiteral::Null, 1),
+            create_token(Number, "2", TokenLiteral::NumberLit(2.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::B(_)));
+            if let Expr::B(binary_expr) = &expr_stmt.expr {
+                assert!(matches!(*binary_expr.left, Expr::Li(_)));
+                if let Expr::Li(left_literal) = &*binary_expr.left {
+                    assert_eq!(left_literal.value, TokenLiteral::NumberLit(1.0));
+                }
+
+                assert!(matches!(*binary_expr.right, Expr::Li(_)));
+                if let Expr::Li(right_literal) = &*binary_expr.right {
+                    assert_eq!(right_literal.value, TokenLiteral::NumberLit(2.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_unary_expression() {
+        let tokens = vec![
+            create_token(Minus, "-", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::U(_)));
+            if let Expr::U(unary_expr) = &expr_stmt.expr {
+                assert!(matches!(*unary_expr.expr, Expr::Li(_)));
+                if let Expr::Li(literal) = &*unary_expr.expr {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_grouping_expression() {
+        let tokens = vec![
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::Gr(_)));
+            if let Expr::Gr(grouping_expr) = &expr_stmt.expr {
+                assert!(matches!(*grouping_expr.expr, Expr::Li(_)));
+                if let Expr::Li(literal) = &*grouping_expr.expr {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment_expression() {
+        let tokens = vec![
+            create_token(Identifier, "x", TokenLiteral::Null, 1),
+            create_token(Equal, "=", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::A(_)));
+            if let Expr::A(assign_expr) = &expr_stmt.expr {
+                assert_eq!(assign_expr.name.lexeme, "x");
+
+                assert!(matches!(*assign_expr.value, Expr::Li(_)));
+                if let Expr::Li(literal) = &*assign_expr.value {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_call_expression() {
+        let tokens = vec![
+            create_token(Identifier, "foo", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::C(_)));
+            if let Expr::C(call_expr) = &expr_stmt.expr {
+                assert!(matches!(*call_expr.callee, Expr::V(_)));
+                if let Expr::V(variable) = &*call_expr.callee {
+                    assert_eq!(variable.name.lexeme, "foo");
+                }
+
+                assert_eq!(call_expr.args.len(), 1);
+                assert!(matches!(&call_expr.args[0], Expr::Li(_)));
+                if let Expr::Li(literal) = &call_expr.args[0] {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_class_declaration() {
+        let tokens = vec![
+            create_token(Class, "class", TokenLiteral::Null, 1),
+            create_token(Identifier, "MyClass", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Identifier, "method", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::C(_)));
+        if let Stmt::C(class_stmt) = &stmts[0] {
+            assert_eq!(class_stmt.name.lexeme, "MyClass");
+            assert!(class_stmt.superclass.is_none());
+            assert_eq!(class_stmt.methods.len(), 1);
+
+            let method = &class_stmt.methods[0];
+            assert_eq!(method.name.lexeme, "method");
+            assert!(method.params.is_empty());
+            assert!(method.body.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_parse_super_expression() {
+        let tokens = vec![
+            create_token(Super, "super", TokenLiteral::Null, 1),
+            create_token(Dot, ".", TokenLiteral::Null, 1),
+            create_token(Identifier, "method", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::Su(_)));
+            if let Expr::Su(super_expr) = &expr_stmt.expr {
+                assert_eq!(super_expr.method.lexeme, "method");
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_this_expression() {
+        let tokens = vec![
+            create_token(This, "this", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::T(_)));
+            if let Expr::T(this_expr) = &expr_stmt.expr {
+                assert_eq!(this_expr.keyword.lexeme, "this");
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_empty_block_statement() {
+        let tokens = vec![
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::B(_)));
+        if let Stmt::B(block_stmt) = &stmts[0] {
+            assert!(block_stmt.stmts.is_empty());
+        }
+    }
+
+    #[test]
+    fn test_parse_nested_if_statement() {
+        let tokens = vec![
+            create_token(If, "if", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(If, "if", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(False, "false", TokenLiteral::Bool(false), 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::I(_)));
+        if let Stmt::I(if_stmt) = &stmts[0] {
+            assert!(matches!(if_stmt.condition, Expr::Li(_)));
+            if let Expr::Li(condition) = &if_stmt.condition {
+                assert_eq!(condition.value, TokenLiteral::Bool(true));
+            }
+
+            assert!(matches!(&*if_stmt.then_branch, Stmt::I(_)));
+            if let Stmt::I(nested_if_stmt) = &*if_stmt.then_branch {
+                assert!(matches!(nested_if_stmt.condition, Expr::Li(_)));
+                if let Expr::Li(nested_condition) = &nested_if_stmt.condition {
+                    assert_eq!(nested_condition.value, TokenLiteral::Bool(false));
+                }
+
+                assert!(matches!(&*nested_if_stmt.then_branch, Stmt::E(_)));
+                if let Stmt::E(expr_stmt) = &*nested_if_stmt.then_branch {
+                    assert!(matches!(expr_stmt.expr, Expr::Li(_)));
+                    if let Expr::Li(literal) = &expr_stmt.expr {
+                        assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_for_statement_with_empty_clauses() {
+        let tokens = vec![
+            create_token(For, "for", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::W(_)));
+        if let Stmt::W(while_stmt) = &stmts[0] {
+            assert!(matches!(while_stmt.condition, Expr::Li(_)));
+            if let Expr::Li(condition) = &while_stmt.condition {
+                assert_eq!(condition.value, TokenLiteral::Bool(true));
+            }
+
+            assert!(matches!(&*while_stmt.body, Stmt::E(_)));
+            if let Stmt::E(body_stmt) = &*while_stmt.body {
+                assert!(matches!(body_stmt.expr, Expr::Li(_)));
+                if let Expr::Li(literal) = &body_stmt.expr {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_chained_logical_expressions() {
+        let tokens = vec![
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(And, "and", TokenLiteral::Null, 1),
+            create_token(False, "false", TokenLiteral::Bool(false), 1),
+            create_token(Or, "or", TokenLiteral::Null, 1),
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::Lo(_)));
+            if let Expr::Lo(logical_expr) = &expr_stmt.expr {
+                assert!(matches!(*logical_expr.left, Expr::Lo(_)));
+                if let Expr::Lo(left_expr) = &*logical_expr.left {
+                    assert!(matches!(*left_expr.left, Expr::Li(_)));
+                    if let Expr::Li(left_literal) = &*left_expr.left {
+                        assert_eq!(left_literal.value, TokenLiteral::Bool(true));
+                    }
+
+                    assert!(matches!(*left_expr.right, Expr::Li(_)));
+                    if let Expr::Li(right_literal) = &*left_expr.right {
+                        assert_eq!(right_literal.value, TokenLiteral::Bool(false));
+                    }
+                }
+
+                assert!(matches!(*logical_expr.right, Expr::Li(_)));
+                if let Expr::Li(right_literal) = &*logical_expr.right {
+                    assert_eq!(right_literal.value, TokenLiteral::Bool(true));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_invalid_expression() {
+        let tokens = vec![
+            create_token(Plus, "+", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_semicolon() {
+        let tokens = vec![
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_parentheses_in_function_call() {
+        let tokens = vec![
+            create_token(Identifier, "foo", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_braces_in_class_declaration() {
+        let tokens = vec![
+            create_token(Class, "class", TokenLiteral::Null, 1),
+            create_token(Identifier, "MyClass", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_right_parenthesis_in_if_statement() {
+        let tokens = vec![
+            create_token(If, "if", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(True, "true", TokenLiteral::Bool(true), 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_super_method_name() {
+        let tokens = vec![
+            create_token(Super, "super", TokenLiteral::Null, 1),
+            create_token(Dot, ".", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_variable_name_in_declaration() {
+        let tokens = vec![
+            create_token(Var, "var", TokenLiteral::Null, 1),
+            create_token(Equal, "=", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_missing_condition_in_while_statement() {
+        let tokens = vec![
+            create_token(While, "while", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_err());
     }
 }

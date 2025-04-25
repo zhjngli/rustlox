@@ -466,3 +466,403 @@ impl SVisitor<Result<(), IR>> for Interpreter {
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        expr::{BinaryE, LiteralE},
+        token::{Token, TokenLiteral, TokenType},
+    };
+
+    fn create_token(
+        token_type: TokenType,
+        lexeme: &str,
+        literal: TokenLiteral,
+        line: usize,
+    ) -> TokenRef {
+        TokenRef::new(Token {
+            token_type,
+            lexeme: lexeme.to_string(),
+            literal,
+            line,
+        })
+    }
+
+    #[test]
+    fn test_interpreter_literal_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::Li(LiteralE::new(TokenLiteral::NumberLit(42.0)));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 42.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_binary_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::B(BinaryE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+            create_token(TokenType::Plus, "+", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(20.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 30.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_grouping_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::Gr(GroupingE::new(Expr::Li(LiteralE::new(
+            TokenLiteral::NumberLit(42.0),
+        ))));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 42.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_unary_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::U(UnaryE::new(
+            create_token(TokenType::Minus, "-", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(5.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, -5.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_logical_or_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::Lo(LogicalE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::Bool(false))),
+            create_token(TokenType::Or, "or", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::Bool(true))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Bool(_)));
+        if let LoxValue::Bool(b) = result {
+            assert_eq!(b, true);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_logical_and_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::Lo(LogicalE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::Bool(true))),
+            create_token(TokenType::And, "and", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::Bool(false))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Bool(_)));
+        if let LoxValue::Bool(b) = result {
+            assert_eq!(b, false);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_equality_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::B(BinaryE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+            create_token(TokenType::EqualEqual, "==", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Bool(_)));
+        if let LoxValue::Bool(b) = result {
+            assert_eq!(b, true);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_inequality_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::B(BinaryE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+            create_token(TokenType::BangEqual, "!=", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(20.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Bool(_)));
+        if let LoxValue::Bool(b) = result {
+            assert_eq!(b, true);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_comparison_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::B(BinaryE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+            create_token(TokenType::Greater, ">", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(5.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Bool(_)));
+        if let LoxValue::Bool(b) = result {
+            assert_eq!(b, true);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_variable_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        interpreter
+            .environment
+            .borrow_mut()
+            .define("x".to_owned(), Some(LoxValue::Number(42.0)));
+
+        let expr = Expr::V(VariableE::new(create_token(
+            TokenType::Identifier,
+            "x",
+            TokenLiteral::Null,
+            1,
+        )));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 42.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_assignment_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        interpreter
+            .environment
+            .borrow_mut()
+            .define("x".to_owned(), Some(LoxValue::Number(10.0)));
+
+        let expr = Expr::A(AssignE::new(
+            create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(20.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 20.0);
+        }
+
+        let updated_value = interpreter
+            .environment
+            .borrow()
+            .get(&create_token(
+                TokenType::Identifier,
+                "x",
+                TokenLiteral::Null,
+                1,
+            ))
+            .unwrap();
+        assert!(matches!(updated_value, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = updated_value {
+            assert_eq!(n, 20.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_this_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let class = LoxClass::new("TestClass".to_owned(), None, HashMap::new());
+        let instance = class.call(&mut interpreter, vec![]).unwrap();
+
+        interpreter
+            .environment
+            .borrow_mut()
+            .define("this".to_owned(), Some(instance));
+
+        let expr = Expr::T(ThisE::new(create_token(
+            TokenType::This,
+            "this",
+            TokenLiteral::Null,
+            1,
+        )));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::ClassInstance(_)));
+    }
+
+    #[test]
+    fn test_interpreter_var_statement() {
+        let mut interpreter = Interpreter::new(false);
+
+        let stmt = Stmt::V(VarS {
+            name: create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
+            initializer: Some(Expr::Li(LiteralE::new(TokenLiteral::NumberLit(42.0)))),
+        });
+
+        interpreter.execute(&stmt).unwrap();
+
+        let value = interpreter
+            .environment
+            .borrow()
+            .get(&create_token(
+                TokenType::Identifier,
+                "x",
+                TokenLiteral::Null,
+                1,
+            ))
+            .unwrap();
+        assert!(matches!(value, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = value {
+            assert_eq!(n, 42.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_print_statement() {
+        let mut interpreter = Interpreter::new(false);
+
+        let stmt = Stmt::P(PrintS {
+            expr: Expr::Li(LiteralE::new(TokenLiteral::NumberLit(42.0))),
+        });
+        let result = interpreter.execute(&stmt);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_interpreter_block_statement() {
+        let mut interpreter = Interpreter::new(false);
+
+        let stmts = vec![
+            Stmt::V(VarS {
+                name: create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
+                initializer: Some(Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0)))),
+            }),
+            Stmt::V(VarS {
+                name: create_token(TokenType::Identifier, "y", TokenLiteral::Null, 1),
+                initializer: Some(Expr::Li(LiteralE::new(TokenLiteral::NumberLit(20.0)))),
+            }),
+        ];
+
+        let block_stmt = Stmt::B(BlockS { stmts });
+
+        interpreter.execute(&block_stmt).unwrap();
+
+        let x_value = interpreter.environment.borrow().get(&create_token(
+            TokenType::Identifier,
+            "x",
+            TokenLiteral::Null,
+            1,
+        ));
+        assert!(x_value.is_err()); // x should not exist in the outer environment
+
+        let y_value = interpreter.environment.borrow().get(&create_token(
+            TokenType::Identifier,
+            "y",
+            TokenLiteral::Null,
+            1,
+        ));
+        assert!(y_value.is_err()); // y should not exist in the outer environment
+    }
+
+    #[test]
+    fn test_interpreter_if_statement() {
+        let mut interpreter = Interpreter::new(false);
+
+        let stmt = Stmt::I(IfS {
+            condition: Expr::Li(LiteralE::new(TokenLiteral::Bool(true))),
+            then_branch: Box::new(Stmt::P(PrintS {
+                expr: Expr::Li(LiteralE::new(TokenLiteral::StringLit(
+                    "then branch".to_owned(),
+                ))),
+            })),
+            else_branch: Some(Box::new(Stmt::P(PrintS {
+                expr: Expr::Li(LiteralE::new(TokenLiteral::StringLit(
+                    "else branch".to_owned(),
+                ))),
+            }))),
+        });
+
+        interpreter.execute(&stmt).unwrap();
+    }
+
+    #[test]
+    fn test_interpreter_while_statement() {
+        let mut interpreter = Interpreter::new(false);
+
+        interpreter
+            .environment
+            .borrow_mut()
+            .define("x".to_owned(), Some(LoxValue::Number(0.0)));
+
+        let stmt = Stmt::W(WhileS {
+            condition: Expr::B(BinaryE::new(
+                Expr::V(VariableE::new(create_token(
+                    TokenType::Identifier,
+                    "x",
+                    TokenLiteral::Null,
+                    1,
+                ))),
+                create_token(TokenType::Less, "<", TokenLiteral::Null, 1),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(3.0))),
+            )),
+            body: Box::new(Stmt::E(ExprS {
+                expr: Expr::A(AssignE::new(
+                    create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1),
+                    Expr::B(BinaryE::new(
+                        Expr::V(VariableE::new(create_token(
+                            TokenType::Identifier,
+                            "x",
+                            TokenLiteral::Null,
+                            1,
+                        ))),
+                        create_token(TokenType::Plus, "+", TokenLiteral::Null, 1),
+                        Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+                    )),
+                )),
+            })),
+        });
+
+        interpreter.execute(&stmt).unwrap();
+
+        let x_value = interpreter
+            .environment
+            .borrow()
+            .get(&create_token(
+                TokenType::Identifier,
+                "x",
+                TokenLiteral::Null,
+                1,
+            ))
+            .unwrap();
+        assert!(matches!(x_value, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = x_value {
+            assert_eq!(n, 3.0);
+        }
+    }
+}

@@ -320,3 +320,171 @@ impl<'a> SVisitor<Result<(), StaticError>> for Resolver<'a> {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        expr::{Expr, VariableE},
+        stmt::{Stmt, VarS},
+        token::{Token, TokenLiteral, TokenType},
+    };
+
+    fn create_token(
+        token_type: TokenType,
+        lexeme: &str,
+        literal: TokenLiteral,
+        line: usize,
+    ) -> TokenRef {
+        TokenRef::new(Token {
+            token_type,
+            lexeme: lexeme.to_string(),
+            literal,
+            line,
+        })
+    }
+
+    #[test]
+    fn test_resolve_variable_declaration() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let var_name = create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1);
+        let stmt = Stmt::V(VarS {
+            name: var_name.clone(),
+            initializer: None,
+        });
+
+        let stmts = vec![stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_variable_usage() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let var_name = create_token(TokenType::Identifier, "x", TokenLiteral::Null, 1);
+        let var_decl = Stmt::V(VarS {
+            name: var_name.clone(),
+            initializer: None,
+        });
+        let var_usage = Stmt::P(PrintS {
+            expr: Expr::V(VariableE::new(var_name.clone())),
+        });
+
+        let stmts = vec![var_decl, var_usage];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_function_declaration() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let func_name = create_token(TokenType::Identifier, "myFunc", TokenLiteral::Null, 1);
+        let func_stmt = Stmt::F(FunctionS {
+            name: func_name.clone(),
+            params: vec![
+                create_token(TokenType::Identifier, "a", TokenLiteral::Null, 1),
+                create_token(TokenType::Identifier, "b", TokenLiteral::Null, 1),
+            ],
+            body: vec![Stmt::E(ExprS {
+                expr: Expr::V(VariableE::new(create_token(
+                    TokenType::Identifier,
+                    "a",
+                    TokenLiteral::Null,
+                    1,
+                ))),
+            })],
+        });
+
+        let stmts = vec![func_stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_class_declaration() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let class_name = create_token(TokenType::Identifier, "MyClass", TokenLiteral::Null, 1);
+        let method_name = create_token(TokenType::Identifier, "method", TokenLiteral::Null, 1);
+        let class_stmt = Stmt::C(ClassS {
+            name: class_name.clone(),
+            superclass: None,
+            methods: vec![FunctionS {
+                name: method_name.clone(),
+                params: vec![],
+                body: vec![Stmt::E(ExprS {
+                    expr: Expr::T(ThisE::new(create_token(
+                        TokenType::This,
+                        "this",
+                        TokenLiteral::Null,
+                        1,
+                    ))),
+                })],
+            }],
+        });
+
+        let stmts = vec![class_stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_super_in_subclass() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let superclass_name =
+            create_token(TokenType::Identifier, "SuperClass", TokenLiteral::Null, 1);
+        let subclass_name = create_token(TokenType::Identifier, "SubClass", TokenLiteral::Null, 1);
+        let method_name = create_token(TokenType::Identifier, "method", TokenLiteral::Null, 1);
+
+        let class_stmt = Stmt::C(ClassS {
+            name: subclass_name.clone(),
+            superclass: Some(VariableE::new(superclass_name.clone())),
+            methods: vec![FunctionS {
+                name: method_name.clone(),
+                params: vec![],
+                body: vec![Stmt::E(ExprS {
+                    expr: Expr::Su(SuperE::new(
+                        create_token(TokenType::Super, "super", TokenLiteral::Null, 1),
+                        create_token(TokenType::Identifier, "method", TokenLiteral::Null, 1),
+                    )),
+                })],
+            }],
+        });
+
+        let stmts = vec![class_stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_super_outside_class() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let stmt = Stmt::E(ExprS {
+            expr: Expr::Su(SuperE::new(
+                create_token(TokenType::Super, "super", TokenLiteral::Null, 1),
+                create_token(TokenType::Identifier, "method", TokenLiteral::Null, 1),
+            )),
+        });
+
+        let stmts = vec![stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_err());
+    }
+}

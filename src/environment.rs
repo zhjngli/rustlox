@@ -124,3 +124,140 @@ impl Environment {
     //     }
     // }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_token(name: &str, line: usize) -> TokenRef {
+        Rc::new(Token::new(
+            TokenType::Identifier,
+            name.to_string(),
+            TokenLiteral::Null,
+            line,
+        ))
+    }
+
+    #[test]
+    fn test_define_and_get() {
+        let mut env = Environment::new();
+        let token = create_token("x", 1);
+        env.define("x".to_string(), Some(LoxValue::Number(42.0)));
+
+        let value = env.get(&token).unwrap();
+        assert!(matches!(value, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = value {
+            assert_eq!(num, 42.0);
+        }
+    }
+
+    #[test]
+    fn test_get_undefined_variable() {
+        let env = Environment::new();
+        let token = create_token("y", 1);
+
+        let result = env.get(&token);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_assign_existing_variable() {
+        let mut env = Environment::new();
+        let token = create_token("z", 1);
+        env.define("z".to_string(), Some(LoxValue::Number(10.0)));
+
+        env.assign(&token, &LoxValue::Number(20.0)).unwrap();
+        let value = env.get(&token).unwrap();
+        assert!(matches!(value, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = value {
+            assert_eq!(num, 20.0);
+        }
+    }
+
+    #[test]
+    fn test_assign_undefined_variable() {
+        let mut env = Environment::new();
+        let token = create_token("a", 1);
+
+        let result = env.assign(&token, &LoxValue::Number(15.0));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_enclosed_environment() {
+        let global = Rc::new(RefCell::new(Environment::new()));
+        global
+            .borrow_mut()
+            .define("x".to_string(), Some(LoxValue::Number(1.0)));
+
+        let local = Rc::new(RefCell::new(Environment::enclosed(global.clone())));
+        let token = create_token("x", 1);
+
+        let value = local.borrow().get(&token).unwrap();
+        assert!(matches!(value, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = value {
+            assert_eq!(num, 1.0);
+        }
+    }
+
+    #[test]
+    fn test_shadowing_in_enclosed_environment() {
+        let global = Rc::new(RefCell::new(Environment::new()));
+        global
+            .borrow_mut()
+            .define("x".to_string(), Some(LoxValue::Number(1.0)));
+
+        let local = Rc::new(RefCell::new(Environment::enclosed(global.clone())));
+        local
+            .borrow_mut()
+            .define("x".to_string(), Some(LoxValue::Number(2.0)));
+
+        let token = create_token("x", 1);
+
+        let value = local.borrow().get(&token).unwrap();
+        assert!(matches!(value, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = value {
+            assert_eq!(num, 2.0);
+        }
+
+        let global_value = global.borrow().get(&token).unwrap();
+        assert!(matches!(global_value, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = global_value {
+            assert_eq!(num, 1.0);
+        }
+    }
+
+    #[test]
+    fn test_ancestor() {
+        let global = Rc::new(RefCell::new(Environment::new()));
+        global
+            .borrow_mut()
+            .define("x".to_string(), Some(LoxValue::Number(1.0)));
+
+        let middle = Rc::new(RefCell::new(Environment::enclosed(global.clone())));
+        middle
+            .borrow_mut()
+            .define("y".to_string(), Some(LoxValue::Number(2.0)));
+
+        let local = Rc::new(RefCell::new(Environment::enclosed(middle.clone())));
+        local
+            .borrow_mut()
+            .define("z".to_string(), Some(LoxValue::Number(3.0)));
+
+        let ancestor = Environment::ancestor(local.clone(), 1);
+        let token_y = create_token("y", 1);
+        let value_y = ancestor.borrow().get(&token_y).unwrap();
+        assert!(matches!(value_y, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = value_y {
+            assert_eq!(num, 2.0);
+        }
+
+        let ancestor_global = Environment::ancestor(local.clone(), 2);
+        let token_x = create_token("x", 1);
+        let value_x = ancestor_global.borrow().get(&token_x).unwrap();
+        assert!(matches!(value_x, LoxValue::Number(_)));
+        if let LoxValue::Number(num) = value_x {
+            assert_eq!(num, 1.0);
+        }
+    }
+}

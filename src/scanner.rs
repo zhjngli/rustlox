@@ -371,7 +371,6 @@ mod tests {
         let mut scanner = Scanner::new(&source);
         let tokens = scanner.scan_tokens();
 
-        // First token should be a dot followed by a number
         assert_eq!(tokens[0].token_type, Dot);
         assert_eq!(tokens[1].token_type, Number);
         match tokens[1].literal {
@@ -379,7 +378,6 @@ mod tests {
             _ => panic!("Expected number literal"),
         }
 
-        // Second should be a number followed by a dot
         assert_eq!(tokens[2].token_type, Number);
         match tokens[2].literal {
             NumberLit(n) => assert_eq!(n, 456.0),
@@ -387,7 +385,6 @@ mod tests {
         }
         assert_eq!(tokens[3].token_type, Dot);
 
-        // Third should be a number
         assert_eq!(tokens[4].token_type, Number);
         match tokens[4].literal {
             NumberLit(n) => assert_eq!(n, 789.0123),
@@ -395,5 +392,108 @@ mod tests {
         }
         assert_eq!(tokens[5].token_type, Eof);
         assert_eq!(tokens.len(), 6);
+    }
+
+    #[test]
+    fn test_unterminated_string() {
+        let source = String::from("\"hello world");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, TString);
+        assert_eq!(tokens[1].token_type, Eof);
+        assert_eq!(tokens.len(), 2);
+    }
+
+    #[test]
+    fn test_unexpected_character() {
+        let source = String::from("var x = 42; @");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Var);
+        assert_eq!(tokens[1].token_type, Identifier);
+        assert_eq!(tokens[2].token_type, Equal);
+        assert_eq!(tokens[3].token_type, Number);
+        assert_eq!(tokens[4].token_type, Semicolon);
+        assert_eq!(tokens[5].token_type, Eof);
+        assert_eq!(tokens.len(), 6);
+    }
+
+    #[test]
+    fn test_unterminated_block_comment() {
+        let source = String::from("/* This is an unterminated block comment");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_type, Eof);
+    }
+
+    #[test]
+    fn test_nested_block_comments() {
+        let source = String::from("/* outer /* inner */ still outer */");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_type, Eof);
+    }
+
+    #[test]
+    fn test_mixed_comments_and_code() {
+        let source = String::from("var x = 42; /* comment */ var y = 43; // inline comment");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Var);
+        assert_eq!(tokens[1].token_type, Identifier);
+        assert_eq!(tokens[2].token_type, Equal);
+        assert_eq!(tokens[3].token_type, Number);
+        assert_eq!(tokens[4].token_type, Semicolon);
+        assert_eq!(tokens[5].token_type, Var);
+        assert_eq!(tokens[6].token_type, Identifier);
+        assert_eq!(tokens[7].token_type, Equal);
+        assert_eq!(tokens[8].token_type, Number);
+        assert_eq!(tokens[9].token_type, Semicolon);
+        assert_eq!(tokens[10].token_type, Eof);
+        assert_eq!(tokens.len(), 11);
+    }
+
+    #[test]
+    fn test_empty_source() {
+        let source = String::from("");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_type, Eof);
+    }
+
+    #[test]
+    fn test_only_whitespace() {
+        let source = String::from("   \n\t  ");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens.len(), 1);
+        assert_eq!(tokens[0].token_type, Eof);
+    }
+
+    #[test]
+    fn test_invalid_number_format() {
+        let source = String::from("123.abc");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Number);
+        match tokens[0].literal {
+            NumberLit(n) => assert_eq!(n, 123.0),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[1].token_type, Dot);
+        assert_eq!(tokens[2].token_type, Identifier);
+        assert_eq!(tokens[3].token_type, Eof);
+        assert_eq!(tokens.len(), 4);
     }
 }
