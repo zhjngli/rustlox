@@ -123,6 +123,10 @@ impl LoxFunction {
             .define("this".to_owned(), Some(LoxValue::ClassInstance(instance)));
         LoxFunction::new(self.declaration.clone(), env, self.is_initializer)
     }
+
+    pub fn is_getter(&self) -> bool {
+        self.declaration.params.is_none()
+    }
 }
 
 impl Display for LoxFunction {
@@ -134,13 +138,11 @@ impl Display for LoxFunction {
 impl Callable for LoxFunction {
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
         let mut environment = Environment::enclosed(Rc::clone(&self.closure));
-        self.declaration
-            .params
-            .iter()
-            .enumerate()
-            .for_each(|(i, param)| {
+        if let Some(params) = &self.declaration.params {
+            params.iter().enumerate().for_each(|(i, param)| {
                 environment.define(param.lexeme.clone(), Some(args.get(i).unwrap().clone()));
             });
+        }
         let result = interpreter.execute_block(&self.declaration.body, environment.to_owned());
         match result {
             Err(IR::Return(value)) => {
@@ -162,7 +164,10 @@ impl Callable for LoxFunction {
     }
 
     fn arity(&self) -> usize {
-        self.declaration.params.len()
+        match &self.declaration.params {
+            Some(params) => params.len(),
+            None => 0,
+        }
     }
 }
 

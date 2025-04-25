@@ -42,7 +42,7 @@ pub struct ExprS {
 #[derive(Debug, Clone)]
 pub struct FunctionS {
     pub name: TokenRef,
-    pub params: Vec<TokenRef>,
+    pub params: Option<Vec<TokenRef>>,
     pub body: Vec<Stmt>,
 }
 

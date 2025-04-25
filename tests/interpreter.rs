@@ -67,6 +67,16 @@ mod classes {
     }
 
     #[test]
+    fn test_getter_method() {
+        test_lox_script(
+            "classes_getter_method.lox",
+            ErrorType::None,
+            "50.265482448\n",
+            "",
+        );
+    }
+
+    #[test]
     fn test_initializer() {
         test_lox_script(
             "classes_initializer.lox",

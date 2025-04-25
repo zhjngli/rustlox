@@ -67,9 +67,11 @@ impl<'a> Resolver<'a> {
         self.current_function = function_type;
 
         self.begin_scope();
-        for p in function.params.clone() {
-            self.declare(&p)?;
-            self.define(&p);
+        if let Some(params) = &function.params {
+            for p in params.clone() {
+                self.declare(&p)?;
+                self.define(&p);
+            }
         }
         self.resolve(&function.body)?;
         self.end_scope();
@@ -390,10 +392,10 @@ mod tests {
         let func_name = create_token(TokenType::Identifier, "myFunc", TokenLiteral::Null, 1);
         let func_stmt = Stmt::F(FunctionS {
             name: func_name.clone(),
-            params: vec![
+            params: Some(vec![
                 create_token(TokenType::Identifier, "a", TokenLiteral::Null, 1),
                 create_token(TokenType::Identifier, "b", TokenLiteral::Null, 1),
-            ],
+            ]),
             body: vec![Stmt::E(ExprS {
                 expr: Expr::V(VariableE::new(create_token(
                     TokenType::Identifier,
@@ -422,7 +424,7 @@ mod tests {
             superclass: None,
             methods: vec![FunctionS {
                 name: method_name.clone(),
-                params: vec![],
+                params: Some(vec![]),
                 body: vec![Stmt::E(ExprS {
                     expr: Expr::T(ThisE::new(create_token(
                         TokenType::This,
@@ -455,7 +457,7 @@ mod tests {
             superclass: Some(VariableE::new(superclass_name.clone())),
             methods: vec![FunctionS {
                 name: method_name.clone(),
-                params: vec![],
+                params: Some(vec![]),
                 body: vec![Stmt::E(ExprS {
                     expr: Expr::Su(SuperE::new(
                         create_token(TokenType::Super, "super", TokenLiteral::Null, 1),

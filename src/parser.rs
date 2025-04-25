@@ -1,3 +1,5 @@
+use std::fmt::{Display, Formatter, Result as DResult};
+
 use crate::{
     expr::{
         AssignE, BinaryE, CallE, Expr, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE, ThisE,
@@ -21,6 +23,21 @@ pub struct Parser<'a> {
     current: usize,
     loop_depth: usize,
     repl: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FunctionKind {
+    Function,
+    Method,
+}
+
+impl Display for FunctionKind {
+    fn fmt(&self, f: &mut Formatter<'_>) -> DResult {
+        match self {
+            FunctionKind::Function => write!(f, "function"),
+            FunctionKind::Method => write!(f, "method"),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -90,7 +107,7 @@ impl<'a> Parser<'a> {
         let stmt_result = if self.match_next(&[Class]) {
             Ok(Stmt::C(self.class_declaration()?))
         } else if self.match_next(&[Fun]) {
-            Ok(Stmt::F(self.function("function")?))
+            Ok(Stmt::F(self.function(FunctionKind::Function)?))
         } else if self.match_next(&[Var]) {
             Ok(Stmt::V(self.var_declaration()?))
         } else {
@@ -117,7 +134,7 @@ impl<'a> Parser<'a> {
         self.consume(&LeftBrace, "Expect '{' before class body.")?;
         let mut methods = Vec::new();
         while !self.check(&RightBrace) && !self.is_at_end() {
-            methods.push(self.function("method")?);
+            methods.push(self.function(FunctionKind::Method)?);
         }
         self.consume(&RightBrace, "Expect '}' after class body.")?;
 
@@ -275,31 +292,35 @@ impl<'a> Parser<'a> {
         Ok(ExprS { expr })
     }
 
-    fn function(&mut self, kind: &str) -> Result<FunctionS, ParseError> {
+    fn function(&mut self, kind: FunctionKind) -> Result<FunctionS, ParseError> {
         let name = self
             .consume(&Identifier, &format!("Expect {} name.", kind))?
             .clone();
 
-        self.consume(&LeftParen, &format!("Expect '(' after {} name.", kind))?;
-        let mut params = Vec::new();
-        if !self.check(&RightParen) {
-            loop {
-                if params.len() >= 255 {
-                    return Err(parse_error(
-                        self.peek(),
-                        "Can't have more than 255 parameters.",
-                        self.repl,
-                    ));
-                }
-                let param = self.consume(&Identifier, "Expect parameter name.")?;
-                params.push(param.clone());
+        let mut params = None;
+        if self.check(&LeftParen) || kind == FunctionKind::Function {
+            self.consume(&LeftParen, &format!("Expect '(' after {} name.", kind))?;
+            let mut some_params = Vec::new();
+            if !self.check(&RightParen) {
+                loop {
+                    if some_params.len() >= 255 {
+                        return Err(parse_error(
+                            self.peek(),
+                            "Can't have more than 255 parameters.",
+                            self.repl,
+                        ));
+                    }
+                    let param = self.consume(&Identifier, "Expect parameter name.")?;
+                    some_params.push(param.clone());
 
-                if !self.match_next(&[Comma]) {
-                    break;
+                    if !self.match_next(&[Comma]) {
+                        break;
+                    }
                 }
             }
+            self.consume(&RightParen, "Expect ')' after parameters")?;
+            params = Some(some_params);
         }
-        self.consume(&RightParen, "Expect ')' after parameters")?;
 
         self.consume(&LeftBrace, &format!("Expect '{{' before {} body.", kind))?;
         let body = self.block()?.stmts;
@@ -936,7 +957,10 @@ mod tests {
 
             let method = &class_stmt.methods[0];
             assert_eq!(method.name.lexeme, "method");
-            assert!(method.params.is_empty());
+            assert!(method
+                .params
+                .clone()
+                .is_some_and(|params| params.is_empty()));
             assert!(method.body.is_empty());
         }
     }
@@ -1305,5 +1329,48 @@ mod tests {
         let result = parser.parse();
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_parse_class_with_getter_method() {
+        let tokens = vec![
+            create_token(Class, "class", TokenLiteral::Null, 1),
+            create_token(Identifier, "MyClass", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Identifier, "getValue", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Return, "return", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::C(_)));
+        if let Stmt::C(class_stmt) = &stmts[0] {
+            assert_eq!(class_stmt.name.lexeme, "MyClass");
+            assert!(class_stmt.superclass.is_none());
+            assert_eq!(class_stmt.methods.len(), 1);
+
+            let method = &class_stmt.methods[0];
+            assert_eq!(method.name.lexeme, "getValue");
+            assert!(method.params.is_none());
+            assert_eq!(method.body.len(), 1);
+
+            if let Stmt::R(return_stmt) = &method.body[0] {
+                assert!(matches!(return_stmt.value, Some(Expr::Li(_))));
+                if let Some(Expr::Li(literal)) = &return_stmt.value {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
     }
 }

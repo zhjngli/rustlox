@@ -240,7 +240,15 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
             Expr::G(GetE { object, name, .. }) => {
                 let object = self.evaluate(object)?;
                 match object {
-                    ClassInstance(i) => i.borrow().get(name),
+                    ClassInstance(i) => {
+                        let val = i.borrow().get(name)?;
+                        match val {
+                            CallVal(LoxCallable::LoxFunction(f)) if f.is_getter() => {
+                                f.call(self, vec![])
+                            }
+                            _ => Ok(val),
+                        }
+                    }
                     _ => Err(IR::RuntimeError(
                         name.clone(),
                         "Only instances have properties.".to_owned(),
@@ -934,6 +942,48 @@ mod tests {
         assert!(matches!(x_value, LoxValue::Number(_)));
         if let LoxValue::Number(n) = x_value {
             assert_eq!(n, 1.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_class_with_getter_method() {
+        let mut interpreter = Interpreter::new(false);
+
+        let class_name = create_token(TokenType::Identifier, "TestClass", TokenLiteral::Null, 1);
+        let getter_name = create_token(TokenType::Identifier, "value", TokenLiteral::Null, 1);
+
+        let getter_method = crate::stmt::FunctionS {
+            name: getter_name.clone(),
+            params: None,
+            body: vec![Stmt::R(crate::stmt::ReturnS {
+                keyword: create_token(TokenType::Return, "return", TokenLiteral::Null, 1),
+                value: Some(Expr::Li(LiteralE::new(TokenLiteral::NumberLit(42.0)))),
+            })],
+        };
+
+        let class_stmt = Stmt::C(ClassS {
+            name: class_name.clone(),
+            superclass: None,
+            methods: vec![getter_method],
+        });
+
+        interpreter.execute(&class_stmt).unwrap();
+
+        let call_class_expr = Expr::C(CallE::new(
+            Expr::V(VariableE::new(class_name.clone())),
+            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+            vec![],
+        ));
+
+        let get_value_expr = Expr::G(GetE::new(
+            call_class_expr,
+            getter_name.clone(),
+        ));
+
+        let result = interpreter.evaluate(&get_value_expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 42.0);
         }
     }
 }
