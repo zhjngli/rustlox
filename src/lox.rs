@@ -49,7 +49,14 @@ type IR = InterpreterResult;
 
 #[enum_dispatch]
 pub trait Callable {
-    // args are not in Rc<RefCell<>>, meaning Lox passes by value, not by reference
+    // args are evaluated before they're passed to a Callable's call function.
+    // Since the args are not wrapped in Rc<RefCell<>>, Lox passes by value, not by reference.
+    // However, LoxValue::List and LoxValue::ClassInstance encapsulate LoxList and LoxInstance,
+    // respectively, in Rc<RefCell<T>>, meaning that Lists and Instances are passed by value
+    // of the reference. So the method can modify the fields of the List or Instance, but it can't
+    // change the reference itself. Effectively, this is similar to Java's distinction between
+    // primitives and objects, where in Lox, primitives are bool, number, and string, while objects
+    // are Lists and Instances.
     fn call(
         &self,
         interpreter: &mut Interpreter,

@@ -1,0 +1,35 @@
+class Foo {
+    init(v) {
+        this.v = v;
+    }
+}
+
+var a = Foo(1);
+
+// pass by value of the reference
+fun newFoo(a) {
+    a = Foo(2);
+}
+
+print a.v; // 1
+newFoo(a);
+print a.v; // 1. newFoo cannot change the reference itself
+
+// pass by value of the reference
+fun incFoo(a) {
+    a.v = a.v + 1;
+}
+
+incFoo(a);
+print a.v; // 2. incFoo can change the value of the reference
+
+var v = 1;
+
+// pass by value
+fun inc(v) {
+    v = v + 1;
+}
+
+print v; // 1
+inc(v);
+print v; // 1. inc only updated the passed value

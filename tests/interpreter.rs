@@ -267,21 +267,31 @@ mod functions {
     }
 
     #[test]
-    fn test_recursive_fibonacci() {
-        test_lox_script(
-            "function_recursive_fibonacci.lox",
-            ErrorType::None,
-            "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n",
-            "",
-        );
-    }
-
-    #[test]
     fn test_hi() {
         test_lox_script(
             "function_hi.lox",
             ErrorType::None,
             "Hi, integration tester!\n",
+            "",
+        );
+    }
+
+    #[test]
+    fn test_pass_by_value_or_reference() {
+        test_lox_script(
+            "function_pass_by_value_or_reference.lox",
+            ErrorType::None,
+            "1\n1\n2\n1\n1\n",
+            "",
+        );
+    }
+
+    #[test]
+    fn test_recursive_fibonacci() {
+        test_lox_script(
+            "function_recursive_fibonacci.lox",
+            ErrorType::None,
+            "0\n1\n1\n2\n3\n5\n8\n13\n21\n34\n55\n89\n144\n233\n377\n610\n987\n1597\n2584\n4181\n",
             "",
         );
     }
