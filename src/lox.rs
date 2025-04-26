@@ -14,9 +14,9 @@ pub enum LoxValue {
     Bool(bool),
     Number(f64),
     String(String),
-    List(Rc<RefCell<Vec<LoxValue>>>), // TODO: extend to support some simple List methods
+    List(Rc<RefCell<LoxList>>),
     CallVal(LoxCallable),
-    ClassInstance(Rc<RefCell<dyn Instance>>),
+    ClassInstance(Rc<RefCell<LoxInstance>>),
     Null,
 }
 
@@ -26,16 +26,7 @@ impl Display for LoxValue {
             Self::Bool(b) => write!(f, "{}", b),
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
-            Self::List(l) => {
-                let mut s = String::new();
-                for (i, v) in l.borrow().iter().enumerate() {
-                    s.push_str(&v.to_string());
-                    if i != l.borrow().len() - 1 {
-                        s.push_str(", ");
-                    }
-                }
-                write!(f, "[{}]", s)
-            }
+            Self::List(l) => write!(f, "{}", l.borrow()),
             Self::CallVal(c) => match c {
                 LoxCallable::NativeFunction(n) => write!(f, "{}", n),
                 LoxCallable::LoxFunction(l) => write!(f, "{}", l),
@@ -58,6 +49,7 @@ type IR = InterpreterResult;
 
 #[enum_dispatch]
 pub trait Callable {
+    // TODO: wrap args in Rc<RefCell<>>?
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR>;
 
     fn arity(&self) -> usize;
@@ -132,7 +124,7 @@ impl LoxFunction {
         }
     }
 
-    pub fn bind(&self, instance: Rc<RefCell<dyn Instance>>) -> LoxFunction {
+    pub fn bind(&self, instance: Rc<RefCell<LoxInstance>>) -> LoxFunction {
         let env = Rc::new(RefCell::new(Environment::enclosed(self.closure.clone())));
         env.borrow_mut()
             .define("this".to_owned(), Some(LoxValue::ClassInstance(instance)));
@@ -189,7 +181,7 @@ impl Callable for LoxFunction {
 #[derive(Debug, Clone)]
 pub struct LoxClass {
     name: String,
-    metaclass: Option<Rc<RefCell<dyn Instance>>>,
+    metaclass: Option<Rc<RefCell<LoxInstance>>>,
     superclass: Option<Box<LoxClass>>,
     methods: HashMap<String, LoxFunction>,
 }
@@ -203,8 +195,7 @@ impl LoxClass {
     ) -> Self {
         LoxClass {
             name,
-            metaclass: metaclass
-                .map(|m| Rc::new(RefCell::new(LoxInstance::new(m))) as Rc<RefCell<dyn Instance>>),
+            metaclass: metaclass.map(|m| Rc::new(RefCell::new(LoxInstance::new(m)))),
             superclass,
             methods,
         }
@@ -216,7 +207,7 @@ impl LoxClass {
             .or_else(|| self.superclass.as_ref().and_then(|s| s.find_method(name)))
     }
 
-    pub fn metaclass(&self) -> Option<Rc<RefCell<dyn Instance>>> {
+    pub fn metaclass(&self) -> Option<Rc<RefCell<LoxInstance>>> {
         self.metaclass.clone()
     }
 }
@@ -244,8 +235,8 @@ impl Callable for LoxClass {
     }
 }
 
-pub trait Instance: Debug + Display {
-    fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<dyn Instance>>) -> Result<LoxValue, IR>;
+pub trait Instance<T>: Debug + Display {
+    fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<T>>) -> Result<LoxValue, IR>;
     fn set(&mut self, name: &TokenRef, value: &LoxValue) -> Result<(), IR>;
 }
 
@@ -264,8 +255,8 @@ impl LoxInstance {
     }
 }
 
-impl Instance for LoxInstance {
-    fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<dyn Instance>>) -> Result<LoxValue, IR> {
+impl Instance<LoxInstance> for LoxInstance {
+    fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<LoxInstance>>) -> Result<LoxValue, IR> {
         if let Some(v) = self.fields.get(&name.lexeme) {
             Ok(v.clone())
         } else if let Some(m) = self.class.find_method(&name.lexeme) {
@@ -289,5 +280,75 @@ impl Instance for LoxInstance {
 impl Display for LoxInstance {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "<instance {}>", self.class.name)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct LoxList {
+    elems: Rc<RefCell<Vec<LoxValue>>>,
+}
+
+impl LoxList {
+    pub fn new(elems: Vec<LoxValue>) -> Self {
+        LoxList {
+            elems: Rc::new(RefCell::new(elems)),
+        }
+    }
+
+    pub fn elems(&self) -> Rc<RefCell<Vec<LoxValue>>> {
+        self.elems.clone()
+    }
+}
+
+impl Display for LoxList {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        let elems: Vec<String> = self.elems.borrow().iter().map(|e| e.to_string()).collect();
+        write!(f, "[{}]", elems.join(", "))
+    }
+}
+
+impl Instance<LoxList> for LoxList {
+    fn get(&self, name: &TokenRef, _self_ref: Rc<RefCell<LoxList>>) -> Result<LoxValue, IR> {
+        if name.lexeme == "length" {
+            Ok(LoxValue::Number(self.elems.borrow().len() as f64))
+        } else if name.lexeme == "append" {
+            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction {
+                name: "append".to_owned(),
+                arity: 1,
+                call: {
+                    let elems = self.elems.clone();
+                    Box::new(move |_, args| {
+                        // arity checked when visiting call expression
+                        let value = args[0].clone();
+                        elems.borrow_mut().push(value.clone());
+                        Ok(value)
+                    })
+                },
+            })))
+        } else if name.lexeme == "pop" {
+            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction {
+                name: "pop".to_owned(),
+                arity: 0,
+                call: {
+                    let elems = self.elems.clone();
+                    Box::new(move |_, _| {
+                        // arity checked when visiting call expression
+                        Ok(elems.borrow_mut().pop().unwrap_or(LoxValue::Null))
+                    })
+                },
+            })))
+        } else {
+            Err(IR::RuntimeError(
+                name.clone(),
+                format!("Undefined property on list '{}'.", name.lexeme),
+            ))
+        }
+    }
+
+    fn set(&mut self, name: &TokenRef, _value: &LoxValue) -> Result<(), IR> {
+        Err(IR::RuntimeError(
+            name.clone(),
+            "Cannot set properties on a list.".to_owned(),
+        ))
     }
 }

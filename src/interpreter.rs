@@ -12,8 +12,8 @@ use crate::{
         LogicalE, SetE, SuperE, ThisE, UnaryE, VariableE, Visitor as EVisitor,
     },
     lox::{
-        Callable, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction,
-        LoxValue::{self, Bool, CallVal, ClassInstance, Null, Number, String},
+        Callable, Instance, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction, LoxList,
+        LoxValue::{self, Bool, CallVal, ClassInstance, List, Null, Number, String},
         NativeFunction,
     },
     stmt::{
@@ -254,6 +254,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         let val = metaclass.borrow().get(name, metaclass.clone())?;
                         Ok(val)
                     }
+                    List(l) => l.borrow().get(name, l.clone()),
                     _ => Err(IR::RuntimeError(
                         name.clone(),
                         "Only instances have properties.".to_owned(),
@@ -266,7 +267,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 for e in elems {
                     values.push(self.evaluate(e)?);
                 }
-                Ok(LoxValue::List(Rc::new(RefCell::new(values))))
+                Ok(LoxValue::List(Rc::new(RefCell::new(LoxList::new(values)))))
             }
             Expr::LG(ListGetE {
                 object,
@@ -279,13 +280,15 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 match object {
                     LoxValue::List(l) => match index {
                         Number(i) => {
-                            if i < 0.0 || i >= l.borrow().len() as f64 {
+                            let elems_ref = l.borrow().elems();
+                            let elems = elems_ref.borrow();
+                            if i < 0.0 || i >= elems.len() as f64 {
                                 return Err(IR::RuntimeError(
                                     bracket.clone(),
                                     format!("Index out of bounds: {}", i),
                                 ));
                             }
-                            Ok(l.borrow()[i as usize].clone())
+                            Ok(elems[i as usize].clone())
                         }
                         _ => Err(IR::RuntimeError(
                             bracket.clone(),
@@ -310,15 +313,17 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 match object {
                     LoxValue::List(l) => match index {
                         Number(i) => {
-                            if i < 0.0 || i >= l.borrow().len() as f64 {
+                            let elems_ref = l.borrow().elems();
+                            let mut elems = elems_ref.borrow_mut();
+                            if i < 0.0 || i >= elems.len() as f64 {
                                 return Err(IR::RuntimeError(
                                     bracket.clone(),
                                     format!("Index out of bounds: {}", i),
                                 ));
                             }
                             let value = self.evaluate(value)?;
-                            l.borrow_mut()[i as usize] = value;
-                            Ok(l.borrow()[i as usize].clone())
+                            elems[i as usize] = value;
+                            Ok(elems[i as usize].clone())
                         }
                         _ => Err(IR::RuntimeError(
                             bracket.clone(),
@@ -366,6 +371,11 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                     ClassInstance(i) => {
                         let value = self.evaluate(value)?;
                         i.borrow_mut().set(name, &value)?;
+                        Ok(value)
+                    }
+                    List(l) => {
+                        let value = self.evaluate(value)?;
+                        l.borrow_mut().set(name, &value)?;
                         Ok(value)
                     }
                     _ => Err(IR::RuntimeError(
@@ -1143,12 +1153,12 @@ mod tests {
         let result = interpreter.evaluate(&expr).unwrap();
         assert!(matches!(result, LoxValue::List(_)));
         if let LoxValue::List(values) = result {
-            assert_eq!(values.borrow().len(), 3);
-            assert!(matches!(values.borrow()[0], LoxValue::Number(3.0)));
-            assert!(
-                matches!(&values.borrow()[1], LoxValue::String(s) if *s == "hello".to_string())
-            );
-            assert!(matches!(values.borrow()[2], LoxValue::Bool(true)));
+            let elems_ref = values.borrow().elems();
+            let elems = elems_ref.borrow();
+            assert_eq!(elems.len(), 3);
+            assert!(matches!(elems[0], LoxValue::Number(3.0)));
+            assert!(matches!(&elems[1], LoxValue::String(s) if *s == "hello".to_string()));
+            assert!(matches!(elems[2], LoxValue::Bool(true)));
         }
     }
 
@@ -1196,6 +1206,69 @@ mod tests {
         assert!(matches!(result, LoxValue::Number(_)));
         if let LoxValue::Number(n) = result {
             assert_eq!(n, 99.0);
+        }
+    }
+
+    #[test]
+    fn test_loxlist_methods() {
+        let mut interpreter = Interpreter::new(false);
+
+        let var_stmt = Stmt::V(VarS {
+            name: create_token(TokenType::Identifier, "a", TokenLiteral::Null, 1),
+            initializer: Some(Expr::L(ListE::new(vec![
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(2.0))),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(3.0))),
+            ]))),
+        });
+        interpreter.execute(&var_stmt).unwrap();
+
+        let pop_expr = Expr::C(CallE::new(
+            Expr::G(GetE::new(
+                Expr::V(VariableE::new(create_token(
+                    TokenType::Identifier,
+                    "a",
+                    TokenLiteral::Null,
+                    1,
+                ))),
+                create_token(TokenType::Identifier, "pop", TokenLiteral::Null, 1),
+            )),
+            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+            vec![],
+        ));
+        interpreter.evaluate(&pop_expr).unwrap();
+
+        let append_expr = Expr::C(CallE::new(
+            Expr::G(GetE::new(
+                Expr::V(VariableE::new(create_token(
+                    TokenType::Identifier,
+                    "a",
+                    TokenLiteral::Null,
+                    1,
+                ))),
+                create_token(TokenType::Identifier, "append", TokenLiteral::Null, 1),
+            )),
+            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+            vec![Expr::Li(LiteralE::new(TokenLiteral::NumberLit(4.0)))],
+        ));
+        interpreter.evaluate(&append_expr).unwrap();
+
+        let a = interpreter
+            .evaluate(&Expr::V(VariableE::new(create_token(
+                TokenType::Identifier,
+                "a",
+                TokenLiteral::Null,
+                1,
+            ))))
+            .unwrap();
+        assert!(matches!(a, LoxValue::List(_)));
+        if let LoxValue::List(values) = a {
+            let elems_ref = values.borrow().elems();
+            let elems = elems_ref.borrow();
+            assert_eq!(elems.len(), 3);
+            assert!(matches!(elems[0], LoxValue::Number(1.0)));
+            assert!(matches!(elems[1], LoxValue::Number(2.0)));
+            assert!(matches!(elems[2], LoxValue::Number(4.0)));
         }
     }
 }

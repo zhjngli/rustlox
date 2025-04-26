@@ -405,6 +405,16 @@ mod lists {
     fn test_index_round_down() {
         test_lox_script("lists_index_round_down.lox", ErrorType::None, "3\n", "");
     }
+
+    #[test]
+    fn test_pop_and_append() {
+        test_lox_script(
+            "lists_pop_and_append.lox",
+            ErrorType::None,
+            "3\n2\n4\n5\n[1, 4, 5]\n",
+            "",
+        );
+    }
 }
 
 mod numbers {

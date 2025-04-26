@@ -1,0 +1,6 @@
+var a = [1, 2, 3];
+print a.pop();
+print a.pop();
+print a.append(4);
+print a.append(5);
+print a;
