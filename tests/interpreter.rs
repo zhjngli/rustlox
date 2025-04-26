@@ -37,6 +37,16 @@ mod scripts {
     use crate::ErrorType;
 
     #[test]
+    fn test_hashmap() {
+        test_lox_script(
+            "hashmap.lox",
+            ErrorType::None,
+            "map: [[], [], [], []]\nsize: 6\nbuckets length: 16\nget 1: 2\nold value at 1: 2\nget 1: 42\nget 10: null\nremove 1: 42\nremove 2: 4\nremove 20: null\nsize: 4\nfinal hashmap:\nbucket[0]\n    (4, 8)\n    (5, 10)\nbucket[1]\nbucket[2]\nbucket[3]\n    (0, 0)\nbucket[4]\n    (3, 6)\nbucket[5]\nbucket[6]\nbucket[7]\nbucket[8]\nbucket[9]\nbucket[10]\nbucket[11]\nbucket[12]\nbucket[13]\nbucket[14]\nbucket[15]\n",
+            "",
+        );
+    }
+
+    #[test]
     fn test_linked_list() {
         test_lox_script(
             "linked_list.lox",

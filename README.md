@@ -2,6 +2,9 @@
 
 following: https://craftinginterpreters.com/
 
+## proof of concepts
+Implemented a [hashmap](./lox_scripts/hashmap.lox)!
+
 ## changes to (tree-walk interpreted) Lox
 1. add support for lists ([usage](./lox_scripts/lists_get_and_set.lox))
 1. add static methods to classes using metaclasses ([usage](./lox_scripts/classes_static_method.lox))

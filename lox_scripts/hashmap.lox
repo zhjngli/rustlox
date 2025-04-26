@@ -1,0 +1,119 @@
+class Tuple {
+    init(l, r) {
+        this.l = l;
+        this.r = r;
+    }
+}
+
+class HashMap {
+    init(n) {
+        this.loadFactor = 0.75;
+        this.size = 0;
+        this.buckets = [];
+        for (var i = 0; i < n; i = i + 1) {
+            this.buckets.append([]);
+        }
+    }
+
+    get(k) {
+        var h = hash(k) % this.buckets.length;
+        for (var i = 0; i < this.buckets[h].length; i = i + 1) {
+            var tuple = this.buckets[h][i];
+            if (tuple.l == k) {
+                return tuple.r;
+            }
+        }
+    }
+
+    put(k, v) {
+        var oldV = this.putHelper(k, v);
+        if (oldV == nil) {
+            // there was no old value, so increase size
+            this.size = this.size + 1;
+            if (this.size / this.buckets.length >= this.loadFactor) {
+                this.resize();
+            }
+        }
+        return oldV;
+    }
+
+    putHelper(k, v) {
+        var h = hash(k) % this.buckets.length;
+        var found = nil;
+        for (var i = 0; i < this.buckets[h].length; i = i + 1) {
+            var tuple = this.buckets[h][i];
+            if (tuple.l == k) {
+                found = tuple.r;
+                tuple.r = v;
+            }
+        }
+        if (found == nil) {
+            this.buckets[h].append(Tuple(k, v));
+        }
+        return found;
+    }
+
+    remove(k) {
+        var h = hash(k) % this.buckets.length;
+        for (var i = 0; i < this.buckets[h].length; i = i + 1) {
+            var tuple = this.buckets[h][i];
+            if (tuple.l == k) {
+                this.size = this.size - 1;
+                this.buckets[h].remove(i);
+                return tuple.r;
+            }
+        }
+    }
+
+    resize() {
+        var items = [];
+        for (var i = 0; i < this.buckets.length; i = i + 1) {
+            for (var j = 0; j < this.buckets[i].length; j = j + 1) {
+                items.append(this.buckets[i][j]);
+            }
+        }
+
+        var newLength = this.buckets.length * 2;
+        this.buckets = [];
+        for (var i = 0; i < newLength; i = i + 1) {
+            this.buckets.append([]);
+        }
+
+        for (var i = 0; i < items.length; i = i + 1) {
+            // don't accidentally resize again
+            this.putHelper(items[i].l, items[i].r);
+        }
+    }
+}
+
+var m = HashMap(4);
+
+print "map: " + m.buckets; // [[], [], [], []]
+for (var i = 0; i < 6; i = i + 1) {
+    m.put(i, i * 2);
+}
+// map should have (0, 0), (1, 2), (2, 4), (3, 6), (4, 8), (5, 10)
+
+print "size: " + m.size; // 6
+print "buckets length: " + m.buckets.length; // 16. resized twice
+
+print "get 1: " + m.get(1); // 2
+print "old value at 1: " + m.put(1, 42); // 2
+
+print "get 1: " + m.get(1); // 42
+print "get 10: " + m.get(10); // null
+
+print "remove 1: " + m.remove(1); // 42
+print "remove 2: " + m.remove(2); // 4
+print "remove 20: " + m.remove(20); // null
+
+print "size: " + m.size; // 4
+
+// map should have (0, 0), (3, 6), (4, 8), (5, 10) and lots of empty buckets
+print "final hashmap:";
+for (var i = 0; i < m.buckets.length; i = i + 1) {
+    print "bucket[" + i + "]";
+    for (var j = 0; j < m.buckets[i].length; j = j + 1) {
+        print "    (" + m.buckets[i][j].l + ", " + m.buckets[i][j].r + ")";
+    }
+}
