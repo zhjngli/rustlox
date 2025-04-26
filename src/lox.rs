@@ -14,9 +14,9 @@ pub enum LoxValue {
     Bool(bool),
     Number(f64),
     String(String),
-    List(Rc<RefCell<Vec<LoxValue>>>),
+    List(Rc<RefCell<Vec<LoxValue>>>), // TODO: extend to support some simple List methods
     CallVal(LoxCallable),
-    ClassInstance(Rc<RefCell<LoxInstance>>),
+    ClassInstance(Rc<RefCell<dyn Instance>>),
     Null,
 }
 
@@ -132,7 +132,7 @@ impl LoxFunction {
         }
     }
 
-    pub fn bind(&self, instance: Rc<RefCell<LoxInstance>>) -> LoxFunction {
+    pub fn bind(&self, instance: Rc<RefCell<dyn Instance>>) -> LoxFunction {
         let env = Rc::new(RefCell::new(Environment::enclosed(self.closure.clone())));
         env.borrow_mut()
             .define("this".to_owned(), Some(LoxValue::ClassInstance(instance)));
@@ -189,7 +189,7 @@ impl Callable for LoxFunction {
 #[derive(Debug, Clone)]
 pub struct LoxClass {
     name: String,
-    metaclass: Option<Rc<RefCell<LoxInstance>>>,
+    metaclass: Option<Rc<RefCell<dyn Instance>>>,
     superclass: Option<Box<LoxClass>>,
     methods: HashMap<String, LoxFunction>,
 }
@@ -203,7 +203,8 @@ impl LoxClass {
     ) -> Self {
         LoxClass {
             name,
-            metaclass: metaclass.map(|m| Rc::new(RefCell::new(LoxInstance::new(m)))),
+            metaclass: metaclass
+                .map(|m| Rc::new(RefCell::new(LoxInstance::new(m))) as Rc<RefCell<dyn Instance>>),
             superclass,
             methods,
         }
@@ -215,7 +216,7 @@ impl LoxClass {
             .or_else(|| self.superclass.as_ref().and_then(|s| s.find_method(name)))
     }
 
-    pub fn metaclass(&self) -> Option<Rc<RefCell<LoxInstance>>> {
+    pub fn metaclass(&self) -> Option<Rc<RefCell<dyn Instance>>> {
         self.metaclass.clone()
     }
 }
@@ -243,6 +244,11 @@ impl Callable for LoxClass {
     }
 }
 
+pub trait Instance: Debug + Display {
+    fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<dyn Instance>>) -> Result<LoxValue, IR>;
+    fn set(&mut self, name: &TokenRef, value: &LoxValue) -> Result<(), IR>;
+}
+
 #[derive(Debug, Clone)]
 pub struct LoxInstance {
     class: LoxClass,
@@ -256,8 +262,10 @@ impl LoxInstance {
             fields: HashMap::new(),
         }
     }
+}
 
-    pub fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<LoxInstance>>) -> Result<LoxValue, IR> {
+impl Instance for LoxInstance {
+    fn get(&self, name: &TokenRef, self_ref: Rc<RefCell<dyn Instance>>) -> Result<LoxValue, IR> {
         if let Some(v) = self.fields.get(&name.lexeme) {
             Ok(v.clone())
         } else if let Some(m) = self.class.find_method(&name.lexeme) {
@@ -272,8 +280,9 @@ impl LoxInstance {
         }
     }
 
-    pub fn set(&mut self, name: &TokenRef, value: &LoxValue) {
+    fn set(&mut self, name: &TokenRef, value: &LoxValue) -> Result<(), IR> {
         self.fields.insert(name.lexeme.clone(), value.clone());
+        Ok(())
     }
 }
 

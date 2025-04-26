@@ -365,7 +365,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 match instance {
                     ClassInstance(i) => {
                         let value = self.evaluate(value)?;
-                        i.borrow_mut().set(name, &value);
+                        i.borrow_mut().set(name, &value)?;
                         Ok(value)
                     }
                     _ => Err(IR::RuntimeError(
