@@ -28,8 +28,8 @@ impl Display for LoxValue {
             Self::String(s) => write!(f, "{}", s),
             Self::List(l) => write!(f, "{}", l.borrow()),
             Self::CallVal(c) => match c {
-                LoxCallable::NativeFunction(n) => write!(f, "{}", n),
-                LoxCallable::LoxFunction(l) => write!(f, "{}", l),
+                LoxCallable::NativeFunction(nf) => write!(f, "{}", nf),
+                LoxCallable::LoxFunction(lf) => write!(f, "{}", lf),
                 LoxCallable::LoxClass(c) => write!(f, "{}", c),
             },
             Self::ClassInstance(i) => write!(f, "{}", i.borrow()),
@@ -49,7 +49,7 @@ type IR = InterpreterResult;
 
 #[enum_dispatch]
 pub trait Callable {
-    // TODO: wrap args in Rc<RefCell<>>?
+    // args are not in Rc<RefCell<>>, meaning Lox passes by value, not by reference
     fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR>;
 
     fn arity(&self) -> usize;
