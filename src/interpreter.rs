@@ -1275,6 +1275,21 @@ mod tests {
         ));
         interpreter.evaluate(&pop_expr).unwrap();
 
+        let remove_expr = Expr::C(CallE::new(
+            Expr::G(GetE::new(
+                Expr::V(VariableE::new(create_token(
+                    TokenType::Identifier,
+                    "a",
+                    TokenLiteral::Null,
+                    1,
+                ))),
+                create_token(TokenType::Identifier, "remove", TokenLiteral::Null, 1),
+            )),
+            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+            vec![Expr::Li(LiteralE::new(TokenLiteral::NumberLit(0.0)))],
+        ));
+        interpreter.evaluate(&remove_expr).unwrap();
+
         let append_expr = Expr::C(CallE::new(
             Expr::G(GetE::new(
                 Expr::V(VariableE::new(create_token(
@@ -1302,10 +1317,9 @@ mod tests {
         if let LoxValue::List(values) = a {
             let elems_ref = values.borrow().elems();
             let elems = elems_ref.borrow();
-            assert_eq!(elems.len(), 3);
-            assert!(matches!(elems[0], LoxValue::Number(1.0)));
-            assert!(matches!(elems[1], LoxValue::Number(2.0)));
-            assert!(matches!(elems[2], LoxValue::Number(4.0)));
+            assert_eq!(elems.len(), 2);
+            assert!(matches!(elems[0], LoxValue::Number(2.0)));
+            assert!(matches!(elems[1], LoxValue::Number(4.0)));
         }
     }
 

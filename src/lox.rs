@@ -379,6 +379,32 @@ impl Instance<LoxList> for LoxList {
                     })
                 },
             ))))
+        } else if name.lexeme == "remove" {
+            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction::new(
+                "remove".to_owned(),
+                1,
+                {
+                    let elems = self.elems.clone();
+                    Rc::new(move |_, args| {
+                        // arity checked when visiting call expression
+                        let index = args[0].clone();
+                        match index {
+                            LoxValue::Number(i) => {
+                                if i >= 0.0 && i < elems.borrow().len() as f64 {
+                                    Ok(elems.borrow_mut().remove(i as usize))
+                                } else {
+                                    Err(NativeFunctionError {
+                                        error: format!("Index out of bounds: {}", i),
+                                    })
+                                }
+                            }
+                            _ => Err(NativeFunctionError {
+                                error: format!("Index must be a number: {}", index),
+                            }),
+                        }
+                    })
+                },
+            ))))
         } else {
             Err(IR::RuntimeError(
                 name.clone(),
