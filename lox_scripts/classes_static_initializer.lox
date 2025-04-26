@@ -1,0 +1,7 @@
+class Value {
+  class init(n) {
+    this.n = n;
+  }
+}
+
+var v = Value(1);

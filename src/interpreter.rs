@@ -249,6 +249,11 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                             _ => Ok(val),
                         }
                     }
+                    CallVal(LoxCallable::LoxClass(c)) if c.metaclass().is_some() => {
+                        let metaclass = c.metaclass().unwrap();
+                        let val = metaclass.borrow().get(name, metaclass.clone())?;
+                        Ok(val)
+                    }
                     _ => Err(IR::RuntimeError(
                         name.clone(),
                         "Only instances have properties.".to_owned(),
@@ -364,6 +369,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                 name,
                 superclass: superclass_expr,
                 methods,
+                class_methods,
             }) => {
                 let superclass = match superclass_expr {
                     Some(s) => {
@@ -381,6 +387,25 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     None => None,
                 };
 
+                // create metaclass
+                let mut metaclass = None;
+                if !class_methods.is_empty() {
+                    let mut cms = HashMap::new();
+                    class_methods.iter().for_each(|m| {
+                        cms.insert(
+                            m.name.lexeme.clone(),
+                            LoxFunction::new(m.clone(), self.environment.clone(), false),
+                        );
+                    });
+                    metaclass = Some(LoxClass::new(
+                        format!("{}_metaclass", name.lexeme),
+                        None,
+                        None,
+                        cms,
+                    ));
+                }
+
+                // create class
                 self.environment
                     .borrow_mut()
                     .define(name.lexeme.clone(), Some(Null));
@@ -407,7 +432,7 @@ impl SVisitor<Result<(), IR>> for Interpreter {
                     );
                 });
 
-                let class = LoxClass::new(name.lexeme.clone(), superclass, ms);
+                let class = LoxClass::new(name.lexeme.clone(), metaclass, superclass, ms);
 
                 if let Some(_) = superclass_expr {
                     self.environment = prev_env;
@@ -714,7 +739,7 @@ mod tests {
     fn test_interpreter_this_expression() {
         let mut interpreter = Interpreter::new(false);
 
-        let class = LoxClass::new("TestClass".to_owned(), None, HashMap::new());
+        let class = LoxClass::new("TestClass".to_owned(), None, None, HashMap::new());
         let instance = class.call(&mut interpreter, vec![]).unwrap();
 
         interpreter
@@ -965,6 +990,7 @@ mod tests {
             name: class_name.clone(),
             superclass: None,
             methods: vec![getter_method],
+            class_methods: vec![],
         });
 
         interpreter.execute(&class_stmt).unwrap();
@@ -981,6 +1007,51 @@ mod tests {
         assert!(matches!(result, LoxValue::Number(_)));
         if let LoxValue::Number(n) = result {
             assert_eq!(n, 42.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_class_with_static_method() {
+        let mut interpreter = Interpreter::new(false);
+
+        let class_name = create_token(TokenType::Identifier, "TestClass", TokenLiteral::Null, 1);
+        let static_method_name = create_token(TokenType::Identifier, "staticMethod", TokenLiteral::Null, 1);
+
+        let static_method = crate::stmt::FunctionS {
+            name: static_method_name.clone(),
+            params: None,
+            body: vec![Stmt::R(crate::stmt::ReturnS {
+                keyword: create_token(TokenType::Return, "return", TokenLiteral::Null, 1),
+                value: Some(Expr::Li(LiteralE::new(TokenLiteral::StringLit(
+                    "Static method called".to_owned(),
+                )))),
+            })],
+        };
+
+        let class_stmt = Stmt::C(ClassS {
+            name: class_name.clone(),
+            superclass: None,
+            methods: vec![],
+            class_methods: vec![static_method],
+        });
+
+        interpreter.execute(&class_stmt).unwrap();
+
+        let get_static_method_expr = Expr::G(GetE::new(
+            Expr::V(VariableE::new(class_name.clone())),
+            static_method_name.clone(),
+        ));
+
+        let call_static_method_expr = Expr::C(CallE::new(
+            get_static_method_expr,
+            create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+            vec![],
+        ));
+
+        let result = interpreter.evaluate(&call_static_method_expr).unwrap();
+        assert!(matches!(result, LoxValue::String(_)));
+        if let LoxValue::String(s) = result {
+            assert_eq!(s, "Static method called");
         }
     }
 }

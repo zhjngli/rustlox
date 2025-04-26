@@ -1,0 +1,7 @@
+class Value {
+  class add(n) {
+    this.n = n;
+  }
+}
+
+Value.add(1);

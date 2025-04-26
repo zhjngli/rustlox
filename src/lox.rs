@@ -174,6 +174,7 @@ impl Callable for LoxFunction {
 #[derive(Debug, Clone)]
 pub struct LoxClass {
     name: String,
+    metaclass: Option<Rc<RefCell<LoxInstance>>>,
     superclass: Option<Box<LoxClass>>,
     methods: HashMap<String, LoxFunction>,
 }
@@ -181,11 +182,13 @@ pub struct LoxClass {
 impl LoxClass {
     pub fn new(
         name: String,
+        metaclass: Option<LoxClass>,
         superclass: Option<Box<LoxClass>>,
         methods: HashMap<String, LoxFunction>,
     ) -> Self {
         LoxClass {
             name,
+            metaclass: metaclass.map(|m| Rc::new(RefCell::new(LoxInstance::new(m)))),
             superclass,
             methods,
         }
@@ -195,6 +198,10 @@ impl LoxClass {
         self.methods
             .get(name)
             .or_else(|| self.superclass.as_ref().and_then(|s| s.find_method(name)))
+    }
+
+    pub fn metaclass(&self) -> Option<Rc<RefCell<LoxInstance>>> {
+        self.metaclass.clone()
     }
 }
 

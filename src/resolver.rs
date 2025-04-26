@@ -228,12 +228,26 @@ impl<'a> SVisitor<Result<(), StaticError>> for Resolver<'a> {
                 name,
                 superclass,
                 methods,
+                class_methods,
             }) => {
                 let enclosing_class = self.current_class;
                 self.current_class = ClassType::Class;
 
                 self.declare(name)?;
                 self.define(name);
+
+                // add class methods to the scope, but don't include `this` or `super` in the scope
+                class_methods.iter().try_for_each(|m| {
+                    let result = if m.name.lexeme == "init" {
+                        Err(static_error(
+                            &m.name,
+                            "Initializers can't be class methods.",
+                        ))
+                    } else {
+                        self.resolve_function(m, FunctionType::Method)
+                    };
+                    result
+                })?;
 
                 if let Some(s) = superclass {
                     self.current_class = ClassType::Subclass;
@@ -434,6 +448,7 @@ mod tests {
                     ))),
                 })],
             }],
+            class_methods: vec![],
         });
 
         let stmts = vec![class_stmt];
@@ -465,6 +480,7 @@ mod tests {
                     )),
                 })],
             }],
+            class_methods: vec![],
         });
 
         let stmts = vec![class_stmt];
@@ -489,5 +505,31 @@ mod tests {
         let result = resolver.resolve(&stmts);
 
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_resolve_class_with_static_method() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let class_name = create_token(TokenType::Identifier, "MyClass", TokenLiteral::Null, 1);
+        let static_method_name = create_token(TokenType::Identifier, "staticMethod", TokenLiteral::Null, 1);
+        let class_stmt = Stmt::C(ClassS {
+            name: class_name.clone(),
+            superclass: None,
+            methods: vec![],
+            class_methods: vec![FunctionS {
+                name: static_method_name.clone(),
+                params: Some(vec![]),
+                body: vec![Stmt::E(ExprS {
+                    expr: Expr::Li(LiteralE::new(TokenLiteral::NumberLit(42.0))),
+                })],
+            }],
+        });
+
+        let stmts = vec![class_stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
     }
 }

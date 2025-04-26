@@ -32,6 +32,7 @@ pub struct ClassS {
     pub name: TokenRef,
     pub superclass: Option<VariableE>,
     pub methods: Vec<FunctionS>,
+    pub class_methods: Vec<FunctionS>,
 }
 
 #[derive(Debug, Clone)]

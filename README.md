@@ -3,6 +3,7 @@
 following: https://craftinginterpreters.com/
 
 ## changes to Lox
+1. add static methods to classes using metaclasses
 1. add getter methods to classes
 1. allow for nested block comments: `/* ... /* ... */ ... */`
 1. variables must be initialized before accessed (they don't default to `nil`)

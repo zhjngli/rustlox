@@ -133,8 +133,13 @@ impl<'a> Parser<'a> {
 
         self.consume(&LeftBrace, "Expect '{' before class body.")?;
         let mut methods = Vec::new();
+        let mut class_methods = Vec::new();
         while !self.check(&RightBrace) && !self.is_at_end() {
-            methods.push(self.function(FunctionKind::Method)?);
+            if self.match_next(&[Class]) {
+                class_methods.push(self.function(FunctionKind::Method)?);
+            } else {
+                methods.push(self.function(FunctionKind::Method)?);
+            }
         }
         self.consume(&RightBrace, "Expect '}' after class body.")?;
 
@@ -142,6 +147,7 @@ impl<'a> Parser<'a> {
             name,
             superclass,
             methods,
+            class_methods,
         })
     }
 
@@ -1366,6 +1372,52 @@ mod tests {
             assert_eq!(method.body.len(), 1);
 
             if let Stmt::R(return_stmt) = &method.body[0] {
+                assert!(matches!(return_stmt.value, Some(Expr::Li(_))));
+                if let Some(Expr::Li(literal)) = &return_stmt.value {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_class_with_static_method() {
+        let tokens = vec![
+            create_token(Class, "class", TokenLiteral::Null, 1),
+            create_token(Identifier, "MyClass", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Class, "class", TokenLiteral::Null, 1),
+            create_token(Identifier, "staticMethod", TokenLiteral::Null, 1),
+            create_token(LeftParen, "(", TokenLiteral::Null, 1),
+            create_token(RightParen, ")", TokenLiteral::Null, 1),
+            create_token(LeftBrace, "{", TokenLiteral::Null, 1),
+            create_token(Return, "return", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(RightBrace, "}", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::C(_)));
+        if let Stmt::C(class_stmt) = &stmts[0] {
+            assert_eq!(class_stmt.name.lexeme, "MyClass");
+            assert!(class_stmt.superclass.is_none());
+            assert_eq!(class_stmt.class_methods.len(), 1);
+
+            let static_method = &class_stmt.class_methods[0];
+            assert_eq!(static_method.name.lexeme, "staticMethod");
+            assert!(static_method.params.clone().is_some_and(|params| params.is_empty()));
+            assert_eq!(static_method.body.len(), 1);
+
+            if let Stmt::R(return_stmt) = &static_method.body[0] {
                 assert!(matches!(return_stmt.value, Some(Expr::Li(_))));
                 if let Some(Expr::Li(literal)) = &return_stmt.value {
                     assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));

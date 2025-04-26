@@ -97,6 +97,41 @@ mod classes {
     }
 
     #[test]
+    fn test_static_initializer() {
+        test_lox_script(
+            "classes_static_initializer.lox",
+            ErrorType::StaticError,
+            "",
+            "[line 2] Error at 'init': Initializers can't be class methods.\nStaticError\n",
+        );
+    }
+
+    #[test]
+    fn test_static_method() {
+        test_lox_script("classes_static_method.lox", ErrorType::None, "9\n2\n", "");
+    }
+
+    #[test]
+    fn test_static_no_super() {
+        test_lox_script(
+            "classes_static_no_super.lox",
+            ErrorType::StaticError,
+            "",
+            "[line 13] Error at 'super': Can't use 'super' in a class with no superclass.\nStaticError\n",
+        );
+    }
+
+    #[test]
+    fn test_static_no_this() {
+        test_lox_script(
+            "classes_static_no_this.lox",
+            ErrorType::RuntimeError,
+            "",
+            "Runtime Error: [line 3] Error at 'this': Undefined variable 'this'.\n",
+        );
+    }
+
+    #[test]
     fn test_this_callback() {
         test_lox_script(
             "classes_this_callback.lox",

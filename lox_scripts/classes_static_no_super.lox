@@ -1,0 +1,17 @@
+class Data {
+    init(n) {
+        this.n = n;
+    }
+
+    getData() {
+        return this.n;
+    }
+}
+
+class Math < Data {
+  class square() {
+    return super.getData() * super.getData();
+  }
+}
+
+print Math.square();
