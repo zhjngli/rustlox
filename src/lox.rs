@@ -36,7 +36,11 @@ impl Display for LoxValue {
                 }
                 write!(f, "[{}]", s)
             }
-            Self::CallVal(c) => write!(f, "{:?}", c),
+            Self::CallVal(c) => match c {
+                LoxCallable::NativeFunction(n) => write!(f, "{}", n),
+                LoxCallable::LoxFunction(l) => write!(f, "{}", l),
+                LoxCallable::LoxClass(c) => write!(f, "{}", c),
+            },
             Self::ClassInstance(i) => write!(f, "{}", i.borrow()),
             Self::Null => write!(f, "null"),
         }
