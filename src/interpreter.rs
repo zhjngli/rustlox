@@ -196,6 +196,13 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                             format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
                         )),
                     },
+                    TokenType::Mod => match (left_val, right_val) {
+                        (Number(l), Number(r)) => Ok(Number(l % r)),
+                        _ => Err(IR::RuntimeError(
+                            op.clone(),
+                            format!("Operands of ({}) must be numbers", op.lexeme).to_owned(),
+                        )),
+                    },
                     TokenType::Plus => match (left_val, right_val) {
                         (Number(l), Number(r)) => Ok(Number(l + r)),
                         (String(l), v) => {
@@ -1299,6 +1306,23 @@ mod tests {
             assert!(matches!(elems[0], LoxValue::Number(1.0)));
             assert!(matches!(elems[1], LoxValue::Number(2.0)));
             assert!(matches!(elems[2], LoxValue::Number(4.0)));
+        }
+    }
+
+    #[test]
+    fn test_interpreter_mod_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::B(BinaryE::new(
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(-10.0))),
+            create_token(TokenType::Mod, "%", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(3.0))),
+        ));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, -1.0);
         }
     }
 }

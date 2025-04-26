@@ -11,9 +11,9 @@ use crate::{
         TokenType::{
             self, And, Bang, BangEqual, Break, Class, Comma, Dot, Else, Eof, Equal, EqualEqual,
             False, For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftBracket,
-            LeftParen, Less, LessEqual, Minus, Nil, Number, Or, Plus, Print, Return, RightBrace,
-            RightBracket, RightParen, Semicolon, Slash, Star, String as TString, Super, This, True,
-            Var, While,
+            LeftParen, Less, LessEqual, Minus, Mod, Nil, Number, Or, Plus, Print, Return,
+            RightBrace, RightBracket, RightParen, Semicolon, Slash, Star, String as TString, Super,
+            This, True, Var, While,
         },
     },
 };
@@ -410,7 +410,7 @@ impl<'a> Parser<'a> {
     }
 
     fn factor(&mut self) -> Result<Expr, ParseError> {
-        self.binary(&[Slash, Star], |p| p.unary())
+        self.binary(&[Mod, Slash, Star], |p| p.unary())
     }
 
     fn binary<F>(&mut self, token_types: &[TokenType], mut parse_fn: F) -> Result<Expr, ParseError>
@@ -1577,6 +1577,40 @@ mod tests {
                 assert!(matches!(*list_set_expr.value, Expr::Li(_)));
                 if let Expr::Li(value_literal) = &*list_set_expr.value {
                     assert_eq!(value_literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_mod_binary_expression() {
+        let tokens = vec![
+            create_token(Number, "10", TokenLiteral::NumberLit(10.0), 1),
+            create_token(Mod, "%", TokenLiteral::Null, 1),
+            create_token(Number, "3", TokenLiteral::NumberLit(3.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::B(_)));
+            if let Expr::B(binary_expr) = &expr_stmt.expr {
+                assert!(matches!(*binary_expr.left, Expr::Li(_)));
+                if let Expr::Li(left_literal) = &*binary_expr.left {
+                    assert_eq!(left_literal.value, TokenLiteral::NumberLit(10.0));
+                }
+
+                assert!(matches!(*binary_expr.right, Expr::Li(_)));
+                if let Expr::Li(right_literal) = &*binary_expr.right {
+                    assert_eq!(right_literal.value, TokenLiteral::NumberLit(3.0));
                 }
             }
         }

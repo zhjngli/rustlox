@@ -8,7 +8,7 @@ use crate::token::{
     TokenType::{
         self, And, Bang, BangEqual, Break, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
         For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftBracket, LeftParen, Less,
-        LessEqual, Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightBracket,
+        LessEqual, Minus, Mod, Nil, Number, Or, Plus, Print, Return, RightBrace, RightBracket,
         RightParen, Semicolon, Slash, Star, String as TString, Super, This, True, Var, While,
     },
 };
@@ -98,6 +98,7 @@ impl<'a> Scanner<'a> {
                 '-' => Some(Token::new(Minus, c.to_string(), Null, self.line)),
                 '+' => Some(Token::new(Plus, c.to_string(), Null, self.line)),
                 ';' => Some(Token::new(Semicolon, c.to_string(), Null, self.line)),
+                '%' => Some(Token::new(Mod, c.to_string(), Null, self.line)),
                 '*' => Some(Token::new(Star, c.to_string(), Null, self.line)),
                 '!' => {
                     if self.match_next('=') {
@@ -498,5 +499,30 @@ mod tests {
         assert_eq!(tokens[2].token_type, Identifier);
         assert_eq!(tokens[3].token_type, Eof);
         assert_eq!(tokens.len(), 4);
+    }
+
+    #[test]
+    fn test_mod_token() {
+        let source = String::from("var x = 10 % 3;");
+        let mut scanner = Scanner::new(&source);
+        let tokens = scanner.scan_tokens();
+
+        assert_eq!(tokens[0].token_type, Var);
+        assert_eq!(tokens[1].token_type, Identifier);
+        assert_eq!(tokens[2].token_type, Equal);
+        assert_eq!(tokens[3].token_type, Number);
+        match tokens[3].literal {
+            NumberLit(n) => assert_eq!(n, 10.0),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[4].token_type, Mod);
+        assert_eq!(tokens[5].token_type, Number);
+        match tokens[5].literal {
+            NumberLit(n) => assert_eq!(n, 3.0),
+            _ => panic!("Expected number literal"),
+        }
+        assert_eq!(tokens[6].token_type, Semicolon);
+        assert_eq!(tokens[7].token_type, Eof);
+        assert_eq!(tokens.len(), 8);
     }
 }
