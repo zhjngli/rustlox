@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
     rc::Rc,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -14,7 +15,7 @@ use crate::{
     lox::{
         Callable, Instance, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction, LoxList,
         LoxValue::{self, Bool, CallVal, ClassInstance, List, Null, Number, String},
-        NativeFunction,
+        NativeFunction, NativeFunctionError,
     },
     stmt::{
         BlockS, BreakS, ClassS, ExprS, IfS, PrintS, ReturnS, Stmt, VarS, Visitor as SVisitor,
@@ -36,10 +37,10 @@ impl Interpreter {
         let globals = Rc::new(RefCell::new(Environment::new()));
         globals.borrow_mut().define(
             "clock".to_owned(),
-            Some(CallVal(LoxCallable::from(NativeFunction {
-                name: "clock".to_owned(),
-                arity: 0,
-                call: Box::new(|_, _| {
+            Some(CallVal(LoxCallable::from(NativeFunction::new(
+                "clock".to_owned(),
+                0,
+                Rc::new(|_, _| {
                     let now = SystemTime::now();
                     let duration = now
                         .duration_since(UNIX_EPOCH)
@@ -47,10 +48,33 @@ impl Interpreter {
                     let seconds = duration.as_secs() as f64;
                     Ok(Number(seconds))
                 }),
-            }))),
+            )))),
+        );
+        globals.borrow_mut().define(
+            "hash".to_owned(),
+            Some(CallVal(LoxCallable::from(NativeFunction::new(
+                "hash".to_owned(),
+                1,
+                Rc::new(|_, args| {
+                    let value = &args[0];
+                    let mut hasher = DefaultHasher::new();
+                    match value {
+                        Bool(b) => b.hash(&mut hasher),
+                        Number(n) => n.to_bits().hash(&mut hasher),
+                        String(s) => s.hash(&mut hasher),
+                        _ => {
+                            return Err(NativeFunctionError {
+                                error: "Can only hash bools, nums, and strings.".to_owned(),
+                            })
+                        }
+                    }
+                    // Shift bits to fit within 53 bits of precision
+                    Ok(LoxValue::Number((hasher.finish() >> 11) as f64))
+                }),
+            )))),
         );
         Interpreter {
-            environment: globals.clone(),
+            environment: Rc::clone(&globals),
             globals,
             locals: HashMap::new(),
             repl,
@@ -229,7 +253,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                                 ),
                             ));
                         }
-                        callable.call(self, args_vals)
+                        callable.call(self, paren.clone(), args_vals)
                     }
                     _ => Err(IR::RuntimeError(
                         paren.clone(),
@@ -244,7 +268,7 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                         let val = i.borrow().get(name, i.clone())?;
                         match val {
                             CallVal(LoxCallable::LoxFunction(f)) if f.is_getter() => {
-                                f.call(self, vec![])
+                                f.call(self, name.clone(), vec![])
                             }
                             _ => Ok(val),
                         }
@@ -820,7 +844,13 @@ mod tests {
         let mut interpreter = Interpreter::new(false);
 
         let class = LoxClass::new("TestClass".to_owned(), None, None, HashMap::new());
-        let instance = class.call(&mut interpreter, vec![]).unwrap();
+        let instance = class
+            .call(
+                &mut interpreter,
+                create_token(TokenType::LeftParen, "(", TokenLiteral::Null, 1),
+                vec![],
+            )
+            .unwrap();
 
         interpreter
             .environment

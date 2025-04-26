@@ -50,7 +50,12 @@ type IR = InterpreterResult;
 #[enum_dispatch]
 pub trait Callable {
     // args are not in Rc<RefCell<>>, meaning Lox passes by value, not by reference
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR>;
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        token: TokenRef,
+        args: Vec<LoxValue>,
+    ) -> Result<LoxValue, IR>;
 
     fn arity(&self) -> usize;
 }
@@ -63,10 +68,25 @@ pub enum LoxCallable {
     LoxClass,
 }
 
+#[derive(Debug, Clone)]
+pub struct NativeFunctionError {
+    pub error: String,
+}
+
 pub struct NativeFunction {
-    pub name: String,
-    pub arity: usize,
-    pub call: Box<dyn Fn(&mut Interpreter, Vec<LoxValue>) -> Result<LoxValue, IR>>,
+    name: String,
+    arity: usize,
+    call: Rc<dyn Fn(&mut Interpreter, Vec<LoxValue>) -> Result<LoxValue, NativeFunctionError>>,
+}
+
+impl NativeFunction {
+    pub fn new(
+        name: String,
+        arity: usize,
+        call: Rc<dyn Fn(&mut Interpreter, Vec<LoxValue>) -> Result<LoxValue, NativeFunctionError>>,
+    ) -> Self {
+        NativeFunction { name, arity, call }
+    }
 }
 
 impl Display for NativeFunction {
@@ -85,18 +105,28 @@ impl Debug for NativeFunction {
 
 impl Clone for NativeFunction {
     fn clone(&self) -> Self {
-        let name_clone = self.name.clone();
         NativeFunction {
             name: self.name.to_owned(),
             arity: self.arity.clone(),
-            call: Box::new(move |_, _| panic!("Can't clone a native function: {}", name_clone)),
+            call: Rc::clone(&self.call),
         }
     }
 }
 
 impl Callable for NativeFunction {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
-        (self.call)(interpreter, args)
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        token: TokenRef,
+        args: Vec<LoxValue>,
+    ) -> Result<LoxValue, IR> {
+        match (self.call)(interpreter, args) {
+            Ok(v) => Ok(v),
+            Err(NativeFunctionError { error }) => Err(IR::RuntimeError(
+                token,
+                format!("Native function error: {}", error),
+            )),
+        }
     }
 
     fn arity(&self) -> usize {
@@ -143,7 +173,12 @@ impl Display for LoxFunction {
 }
 
 impl Callable for LoxFunction {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        _token: TokenRef,
+        args: Vec<LoxValue>,
+    ) -> Result<LoxValue, IR> {
         let mut environment = Environment::enclosed(Rc::clone(&self.closure));
         if let Some(params) = &self.declaration.params {
             params.iter().enumerate().for_each(|(i, param)| {
@@ -219,10 +254,17 @@ impl Display for LoxClass {
 }
 
 impl Callable for LoxClass {
-    fn call(&self, interpreter: &mut Interpreter, args: Vec<LoxValue>) -> Result<LoxValue, IR> {
+    fn call(
+        &self,
+        interpreter: &mut Interpreter,
+        token: TokenRef,
+        args: Vec<LoxValue>,
+    ) -> Result<LoxValue, IR> {
         let instance = Rc::new(RefCell::new(LoxInstance::new(self.clone())));
         if let Some(initializer) = self.find_method("init") {
-            initializer.bind(instance.clone()).call(interpreter, args)?;
+            initializer
+                .bind(instance.clone())
+                .call(interpreter, token, args)?;
         }
         Ok(LoxValue::ClassInstance(instance))
     }
@@ -312,31 +354,31 @@ impl Instance<LoxList> for LoxList {
         if name.lexeme == "length" {
             Ok(LoxValue::Number(self.elems.borrow().len() as f64))
         } else if name.lexeme == "append" {
-            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction {
-                name: "append".to_owned(),
-                arity: 1,
-                call: {
+            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction::new(
+                "append".to_owned(),
+                1,
+                {
                     let elems = self.elems.clone();
-                    Box::new(move |_, args| {
+                    Rc::new(move |_, args| {
                         // arity checked when visiting call expression
                         let value = args[0].clone();
                         elems.borrow_mut().push(value.clone());
                         Ok(value)
                     })
                 },
-            })))
+            ))))
         } else if name.lexeme == "pop" {
-            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction {
-                name: "pop".to_owned(),
-                arity: 0,
-                call: {
+            Ok(LoxValue::CallVal(LoxCallable::from(NativeFunction::new(
+                "pop".to_owned(),
+                0,
+                {
                     let elems = self.elems.clone();
-                    Box::new(move |_, _| {
+                    Rc::new(move |_, _| {
                         // arity checked when visiting call expression
                         Ok(elems.borrow_mut().pop().unwrap_or(LoxValue::Null))
                     })
                 },
-            })))
+            ))))
         } else {
             Err(IR::RuntimeError(
                 name.clone(),

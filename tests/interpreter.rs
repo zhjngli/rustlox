@@ -417,6 +417,21 @@ mod lists {
     }
 }
 
+mod native_function {
+    use crate::test_lox_script;
+    use crate::ErrorType;
+
+    #[test]
+    fn test_hash() {
+        test_lox_script(
+            "native_function_hash.lox",
+            ErrorType::RuntimeError,
+            "6754655388054642\n3997180422823453\n2418384539218088\n3682412656705596\n",
+            "Runtime Error: [line 8] Error at ')': Native function error: Can only hash bools, nums, and strings.\n",
+        );
+    }
+}
+
 mod numbers {
     use crate::test_lox_script;
     use crate::ErrorType;

@@ -1,0 +1,8 @@
+print hash(1);
+print hash("a");
+print hash(true);
+print hash(false);
+
+class Foo {}
+
+print hash(Foo);

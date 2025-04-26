@@ -6,6 +6,7 @@ following: https://craftinginterpreters.com/
 1. add support for lists ([usage](./lox_scripts/lists_get_and_set.lox))
 1. add static methods to classes using metaclasses ([usage](./lox_scripts/classes_static_method.lox))
 1. add getter methods to classes ([usage](./lox_scripts/classes_getter_method.lox))
+1. add `hash` native function ([usage](./lox_scripts/native_function_hash.lox))
 1. allow for nested block comments: `/* ... /* ... */ ... */`
 1. variables must be initialized before accessed (they don't default to `nil`)
 1. disallow division by 0
