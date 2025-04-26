@@ -7,9 +7,9 @@ use crate::token::{
     TokenRef,
     TokenType::{
         self, And, Bang, BangEqual, Break, Class, Comma, Dot, Else, Eof, Equal, EqualEqual, False,
-        For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less, LessEqual,
-        Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen, Semicolon, Slash,
-        Star, String as TString, Super, This, True, Var, While,
+        For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftBracket, LeftParen, Less,
+        LessEqual, Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightBracket,
+        RightParen, Semicolon, Slash, Star, String as TString, Super, This, True, Var, While,
     },
 };
 
@@ -91,6 +91,8 @@ impl<'a> Scanner<'a> {
                 ')' => Some(Token::new(RightParen, c.to_string(), Null, self.line)),
                 '{' => Some(Token::new(LeftBrace, c.to_string(), Null, self.line)),
                 '}' => Some(Token::new(RightBrace, c.to_string(), Null, self.line)),
+                '[' => Some(Token::new(LeftBracket, c.to_string(), Null, self.line)),
+                ']' => Some(Token::new(RightBracket, c.to_string(), Null, self.line)),
                 ',' => Some(Token::new(Comma, c.to_string(), Null, self.line)),
                 '.' => Some(Token::new(Dot, c.to_string(), Null, self.line)),
                 '-' => Some(Token::new(Minus, c.to_string(), Null, self.line)),

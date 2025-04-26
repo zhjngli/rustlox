@@ -8,8 +8,8 @@ use std::{
 use crate::{
     environment::Environment,
     expr::{
-        AssignE, BinaryE, CallE, Expr, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE, ThisE,
-        UnaryE, VariableE, Visitor as EVisitor,
+        AssignE, BinaryE, CallE, Expr, GetE, GroupingE, ListE, ListGetE, ListSetE, LiteralE,
+        LogicalE, SetE, SuperE, ThisE, UnaryE, VariableE, Visitor as EVisitor,
     },
     lox::{
         Callable, InterpreterResult as IR, LoxCallable, LoxClass, LoxFunction,
@@ -261,6 +261,76 @@ impl EVisitor<Result<LoxValue, IR>> for Interpreter {
                 }
             }
             Expr::Gr(GroupingE { expr, .. }) => self.evaluate(expr),
+            Expr::L(ListE { elems, .. }) => {
+                let mut values = Vec::new();
+                for e in elems {
+                    values.push(self.evaluate(e)?);
+                }
+                Ok(LoxValue::List(Rc::new(RefCell::new(values))))
+            }
+            Expr::LG(ListGetE {
+                object,
+                bracket,
+                index,
+                ..
+            }) => {
+                let object = self.evaluate(object)?;
+                let index = self.evaluate(index)?;
+                match object {
+                    LoxValue::List(l) => match index {
+                        Number(i) => {
+                            if i < 0.0 || i >= l.borrow().len() as f64 {
+                                return Err(IR::RuntimeError(
+                                    bracket.clone(),
+                                    format!("Index out of bounds: {}", i),
+                                ));
+                            }
+                            Ok(l.borrow()[i as usize].clone())
+                        }
+                        _ => Err(IR::RuntimeError(
+                            bracket.clone(),
+                            "Index must be a number.".to_owned(),
+                        )),
+                    },
+                    _ => Err(IR::RuntimeError(
+                        bracket.clone(),
+                        "Only lists can be indexed.".to_owned(),
+                    )),
+                }
+            }
+            Expr::LS(ListSetE {
+                object,
+                bracket,
+                index,
+                value,
+                ..
+            }) => {
+                let object = self.evaluate(object)?;
+                let index = self.evaluate(index)?;
+                match object {
+                    LoxValue::List(l) => match index {
+                        Number(i) => {
+                            if i < 0.0 || i >= l.borrow().len() as f64 {
+                                return Err(IR::RuntimeError(
+                                    bracket.clone(),
+                                    format!("Index out of bounds: {}", i),
+                                ));
+                            }
+                            let value = self.evaluate(value)?;
+                            l.borrow_mut()[i as usize] = value;
+                            Ok(l.borrow()[i as usize].clone())
+                        }
+                        _ => Err(IR::RuntimeError(
+                            bracket.clone(),
+                            "Index must be a number.".to_owned(),
+                        )),
+                    },
+                    _ => Err(IR::RuntimeError(
+                        bracket.clone(),
+                        "Only lists can be indexed.".to_owned(),
+                    )),
+                }
+            }
             Expr::Li(LiteralE { value, .. }) => match value {
                 TokenLiteral::NumberLit(n) => Ok(Number(*n)),
                 TokenLiteral::Bool(b) => Ok(Bool(*b)),
@@ -1015,7 +1085,8 @@ mod tests {
         let mut interpreter = Interpreter::new(false);
 
         let class_name = create_token(TokenType::Identifier, "TestClass", TokenLiteral::Null, 1);
-        let static_method_name = create_token(TokenType::Identifier, "staticMethod", TokenLiteral::Null, 1);
+        let static_method_name =
+            create_token(TokenType::Identifier, "staticMethod", TokenLiteral::Null, 1);
 
         let static_method = crate::stmt::FunctionS {
             name: static_method_name.clone(),
@@ -1052,6 +1123,79 @@ mod tests {
         assert!(matches!(result, LoxValue::String(_)));
         if let LoxValue::String(s) = result {
             assert_eq!(s, "Static method called");
+        }
+    }
+
+    #[test]
+    fn test_interpreter_list_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let expr = Expr::L(ListE::new(vec![
+            Expr::B(BinaryE::new(
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+                create_token(TokenType::Plus, "+", TokenLiteral::Null, 1),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(2.0))),
+            )),
+            Expr::Li(LiteralE::new(TokenLiteral::StringLit("hello".to_owned()))),
+            Expr::Li(LiteralE::new(TokenLiteral::Bool(true))),
+        ]));
+
+        let result = interpreter.evaluate(&expr).unwrap();
+        assert!(matches!(result, LoxValue::List(_)));
+        if let LoxValue::List(values) = result {
+            assert_eq!(values.borrow().len(), 3);
+            assert!(matches!(values.borrow()[0], LoxValue::Number(3.0)));
+            assert!(
+                matches!(&values.borrow()[1], LoxValue::String(s) if *s == "hello".to_string())
+            );
+            assert!(matches!(values.borrow()[2], LoxValue::Bool(true)));
+        }
+    }
+
+    #[test]
+    fn test_interpreter_list_get_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let list_expr = Expr::L(ListE::new(vec![
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(20.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(30.0))),
+        ]));
+
+        let list_get_expr = Expr::LG(ListGetE::new(
+            list_expr,
+            create_token(TokenType::RightBracket, "]", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+        ));
+
+        let result = interpreter.evaluate(&list_get_expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 20.0);
+        }
+    }
+
+    #[test]
+    fn test_interpreter_list_set_expression() {
+        let mut interpreter = Interpreter::new(false);
+
+        let list_expr = Expr::L(ListE::new(vec![
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(10.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(20.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(30.0))),
+        ]));
+
+        let list_set_expr = Expr::LS(ListSetE::new(
+            list_expr,
+            create_token(TokenType::RightBracket, "]", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(99.0))),
+        ));
+
+        let result = interpreter.evaluate(&list_set_expr).unwrap();
+        assert!(matches!(result, LoxValue::Number(_)));
+        if let LoxValue::Number(n) = result {
+            assert_eq!(n, 99.0);
         }
     }
 }

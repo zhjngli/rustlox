@@ -14,6 +14,7 @@ pub enum LoxValue {
     Bool(bool),
     Number(f64),
     String(String),
+    List(Rc<RefCell<Vec<LoxValue>>>),
     CallVal(LoxCallable),
     ClassInstance(Rc<RefCell<LoxInstance>>),
     Null,
@@ -25,6 +26,16 @@ impl Display for LoxValue {
             Self::Bool(b) => write!(f, "{}", b),
             Self::Number(n) => write!(f, "{}", n),
             Self::String(s) => write!(f, "{}", s),
+            Self::List(l) => {
+                let mut s = String::new();
+                for (i, v) in l.borrow().iter().enumerate() {
+                    s.push_str(&v.to_string());
+                    if i != l.borrow().len() - 1 {
+                        s.push_str(", ");
+                    }
+                }
+                write!(f, "[{}]", s)
+            }
             Self::CallVal(c) => write!(f, "{:?}", c),
             Self::ClassInstance(i) => write!(f, "{}", i.borrow()),
             Self::Null => write!(f, "null"),

@@ -2,17 +2,18 @@ use std::fmt::{Display, Formatter, Result as DResult};
 
 use crate::{
     expr::{
-        AssignE, BinaryE, CallE, Expr, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE, ThisE,
-        UnaryE, VariableE,
+        AssignE, BinaryE, CallE, Expr, GetE, GroupingE, ListE, ListGetE, ListSetE, LiteralE,
+        LogicalE, SetE, SuperE, ThisE, UnaryE, VariableE,
     },
     stmt::{BlockS, BreakS, ClassS, ExprS, FunctionS, IfS, PrintS, ReturnS, Stmt, VarS, WhileS},
     token::{
         TokenLiteral, TokenRef,
         TokenType::{
             self, And, Bang, BangEqual, Break, Class, Comma, Dot, Else, Eof, Equal, EqualEqual,
-            False, For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftParen, Less,
-            LessEqual, Minus, Nil, Number, Or, Plus, Print, Return, RightBrace, RightParen,
-            Semicolon, Slash, Star, String as TString, Super, This, True, Var, While,
+            False, For, Fun, Greater, GreaterEqual, Identifier, If, LeftBrace, LeftBracket,
+            LeftParen, Less, LessEqual, Minus, Nil, Number, Or, Plus, Print, Return, RightBrace,
+            RightBracket, RightParen, Semicolon, Slash, Star, String as TString, Super, This, True,
+            Var, While,
         },
     },
 };
@@ -349,11 +350,24 @@ impl<'a> Parser<'a> {
             let value = self.assignment()?;
 
             match expr {
-                Expr::V(VariableE { name, .. }) => {
-                    return Ok(Expr::A(AssignE::new(name.clone(), value)))
-                }
                 Expr::G(GetE { object, name, .. }) => {
                     return Ok(Expr::S(SetE::new(*object, name.clone(), value)))
+                }
+                Expr::LG(ListGetE {
+                    object,
+                    bracket,
+                    index,
+                    ..
+                }) => {
+                    return Ok(Expr::LS(ListSetE::new(
+                        *object,
+                        bracket.clone(),
+                        *index,
+                        value,
+                    )))
+                }
+                Expr::V(VariableE { name, .. }) => {
+                    return Ok(Expr::A(AssignE::new(name.clone(), value)))
                 }
                 _ => {
                     parse_error(&equals, "Invalid assignment target.", self.repl);
@@ -424,7 +438,12 @@ impl<'a> Parser<'a> {
     fn call(&mut self) -> Result<Expr, ParseError> {
         let mut expr = self.primary()?;
         loop {
-            if self.match_next(&[LeftParen]) {
+            if self.match_next(&[LeftBracket]) {
+                let bracket = self.previous().clone();
+                let index = self.expression()?;
+                self.consume(&RightBracket, "Expect ']' after index.")?;
+                expr = Expr::LG(ListGetE::new(expr, bracket, index));
+            } else if self.match_next(&[LeftParen]) {
                 expr = self.finish_call(expr)?;
             } else if self.match_next(&[Dot]) {
                 let name = self
@@ -463,31 +482,43 @@ impl<'a> Parser<'a> {
 
     fn primary(&mut self) -> Result<Expr, ParseError> {
         if self.match_next(&[True]) {
-            return Ok(Expr::Li(LiteralE::new(TokenLiteral::Bool(true))));
+            Ok(Expr::Li(LiteralE::new(TokenLiteral::Bool(true))))
         } else if self.match_next(&[False]) {
-            return Ok(Expr::Li(LiteralE::new(TokenLiteral::Bool(false))));
+            Ok(Expr::Li(LiteralE::new(TokenLiteral::Bool(false))))
         } else if self.match_next(&[Nil]) {
-            return Ok(Expr::Li(LiteralE::new(TokenLiteral::Null)));
+            Ok(Expr::Li(LiteralE::new(TokenLiteral::Null)))
         } else if self.match_next(&[Number, TString]) {
-            return Ok(Expr::Li(LiteralE::new(self.previous().literal.clone())));
+            Ok(Expr::Li(LiteralE::new(self.previous().literal.clone())))
         } else if self.match_next(&[Super]) {
             let keyword = self.previous().clone();
             self.consume(&Dot, "Expect '.' after 'super'.")?;
             let method = self
                 .consume(&Identifier, "Expect superclass method name.")?
                 .clone();
-            return Ok(Expr::Su(SuperE::new(keyword, method)));
+            Ok(Expr::Su(SuperE::new(keyword, method)))
         } else if self.match_next(&[This]) {
-            return Ok(Expr::T(ThisE::new(self.previous().clone())));
+            Ok(Expr::T(ThisE::new(self.previous().clone())))
         } else if self.match_next(&[Identifier]) {
-            return Ok(Expr::V(VariableE::new(self.previous().clone())));
+            Ok(Expr::V(VariableE::new(self.previous().clone())))
+        } else if self.match_next(&[LeftBracket]) {
+            let mut elems = Vec::new();
+            if !self.check(&RightBracket) {
+                loop {
+                    elems.push(self.expression()?);
+                    if !self.match_next(&[Comma]) {
+                        break;
+                    }
+                }
+            }
+            self.consume(&RightBracket, "Expect ']' after list.")?;
+            Ok(Expr::L(ListE::new(elems)))
         } else if self.match_next(&[LeftParen]) {
             let expr = self.expression()?;
             self.consume(&RightParen, "Expect ')' after expression.")?;
-            return Ok(Expr::Gr(GroupingE::new(expr)));
+            Ok(Expr::Gr(GroupingE::new(expr)))
+        } else {
+            Err(parse_error(self.peek(), "Expect expression.", self.repl))
         }
-
-        Err(parse_error(self.peek(), "Expect expression.", self.repl))
     }
 
     fn match_next(&mut self, token_types: &[TokenType]) -> bool {
@@ -1414,13 +1445,138 @@ mod tests {
 
             let static_method = &class_stmt.class_methods[0];
             assert_eq!(static_method.name.lexeme, "staticMethod");
-            assert!(static_method.params.clone().is_some_and(|params| params.is_empty()));
+            assert!(static_method
+                .params
+                .clone()
+                .is_some_and(|params| params.is_empty()));
             assert_eq!(static_method.body.len(), 1);
 
             if let Stmt::R(return_stmt) = &static_method.body[0] {
                 assert!(matches!(return_stmt.value, Some(Expr::Li(_))));
                 if let Some(Expr::Li(literal)) = &return_stmt.value {
                     assert_eq!(literal.value, TokenLiteral::NumberLit(42.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_list_expression() {
+        let tokens = vec![
+            create_token(LeftBracket, "[", TokenLiteral::Null, 1),
+            create_token(Number, "1", TokenLiteral::NumberLit(1.0), 1),
+            create_token(Comma, ",", TokenLiteral::Null, 1),
+            create_token(Number, "2", TokenLiteral::NumberLit(2.0), 1),
+            create_token(Comma, ",", TokenLiteral::Null, 1),
+            create_token(Number, "3", TokenLiteral::NumberLit(3.0), 1),
+            create_token(RightBracket, "]", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::L(_)));
+            if let Expr::L(list_expr) = &expr_stmt.expr {
+                assert_eq!(list_expr.elems.len(), 3);
+
+                assert!(matches!(&list_expr.elems[0], Expr::Li(_)));
+                if let Expr::Li(literal) = &list_expr.elems[0] {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(1.0));
+                }
+
+                assert!(matches!(&list_expr.elems[1], Expr::Li(_)));
+                if let Expr::Li(literal) = &list_expr.elems[1] {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(2.0));
+                }
+
+                assert!(matches!(&list_expr.elems[2], Expr::Li(_)));
+                if let Expr::Li(literal) = &list_expr.elems[2] {
+                    assert_eq!(literal.value, TokenLiteral::NumberLit(3.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_list_get_expression() {
+        let tokens = vec![
+            create_token(Identifier, "myList", TokenLiteral::Null, 1),
+            create_token(LeftBracket, "[", TokenLiteral::Null, 1),
+            create_token(Number, "1", TokenLiteral::NumberLit(1.0), 1),
+            create_token(RightBracket, "]", TokenLiteral::Null, 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::LG(_)));
+            if let Expr::LG(list_get_expr) = &expr_stmt.expr {
+                assert!(matches!(*list_get_expr.object, Expr::V(_)));
+                if let Expr::V(variable) = &*list_get_expr.object {
+                    assert_eq!(variable.name.lexeme, "myList");
+                }
+
+                assert!(matches!(*list_get_expr.index, Expr::Li(_)));
+                if let Expr::Li(index_literal) = &*list_get_expr.index {
+                    assert_eq!(index_literal.value, TokenLiteral::NumberLit(1.0));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_parse_list_set_expression() {
+        let tokens = vec![
+            create_token(Identifier, "myList", TokenLiteral::Null, 1),
+            create_token(LeftBracket, "[", TokenLiteral::Null, 1),
+            create_token(Number, "1", TokenLiteral::NumberLit(1.0), 1),
+            create_token(RightBracket, "]", TokenLiteral::Null, 1),
+            create_token(Equal, "=", TokenLiteral::Null, 1),
+            create_token(Number, "42", TokenLiteral::NumberLit(42.0), 1),
+            create_token(Semicolon, ";", TokenLiteral::Null, 1),
+            create_token(Eof, "", TokenLiteral::Null, 1),
+        ];
+
+        let mut parser = Parser::new(&tokens, false);
+        let result = parser.parse();
+
+        assert!(result.is_ok());
+        let stmts = result.unwrap();
+        assert_eq!(stmts.len(), 1);
+
+        assert!(matches!(&stmts[0], Stmt::E(_)));
+        if let Stmt::E(expr_stmt) = &stmts[0] {
+            assert!(matches!(expr_stmt.expr, Expr::LS(_)));
+            if let Expr::LS(list_set_expr) = &expr_stmt.expr {
+                assert!(matches!(*list_set_expr.object, Expr::V(_)));
+                if let Expr::V(variable) = &*list_set_expr.object {
+                    assert_eq!(variable.name.lexeme, "myList");
+                }
+
+                assert!(matches!(*list_set_expr.index, Expr::Li(_)));
+                if let Expr::Li(index_literal) = &*list_set_expr.index {
+                    assert_eq!(index_literal.value, TokenLiteral::NumberLit(1.0));
+                }
+
+                assert!(matches!(*list_set_expr.value, Expr::Li(_)));
+                if let Expr::Li(value_literal) = &*list_set_expr.value {
+                    assert_eq!(value_literal.value, TokenLiteral::NumberLit(42.0));
                 }
             }
         }

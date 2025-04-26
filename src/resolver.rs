@@ -2,8 +2,8 @@ use std::collections::HashMap;
 
 use crate::{
     expr::{
-        AssignE, BinaryE, CallE, Expr, GetE, GroupingE, LiteralE, LogicalE, SetE, SuperE, ThisE,
-        UnaryE, VariableE, Visitor as EVisitor,
+        AssignE, BinaryE, CallE, Expr, GetE, GroupingE, ListE, ListGetE, ListSetE, LiteralE,
+        LogicalE, SetE, SuperE, ThisE, UnaryE, VariableE, Visitor as EVisitor,
     },
     interpreter::Interpreter,
     stmt::{
@@ -156,6 +156,25 @@ impl<'a> EVisitor<Result<(), StaticError>> for Resolver<'a> {
                 object, name: _, ..
             }) => self.resolve_expression(object),
             Expr::Gr(GroupingE { expr, .. }) => self.resolve_expression(expr),
+            Expr::L(ListE { elems, .. }) => {
+                elems.iter().try_for_each(|e| self.resolve_expression(e))
+            }
+            Expr::LG(ListGetE { object, index, .. }) => {
+                self.resolve_expression(object)?;
+                self.resolve_expression(index)?;
+                Ok(())
+            }
+            Expr::LS(ListSetE {
+                object,
+                index,
+                value,
+                ..
+            }) => {
+                self.resolve_expression(object)?;
+                self.resolve_expression(index)?;
+                self.resolve_expression(value)?;
+                Ok(())
+            }
             Expr::Li(LiteralE { value: _, .. }) => Ok(()),
             Expr::Lo(LogicalE {
                 left, op: _, right, ..
@@ -513,7 +532,8 @@ mod tests {
         let mut resolver = Resolver::new(&mut interpreter);
 
         let class_name = create_token(TokenType::Identifier, "MyClass", TokenLiteral::Null, 1);
-        let static_method_name = create_token(TokenType::Identifier, "staticMethod", TokenLiteral::Null, 1);
+        let static_method_name =
+            create_token(TokenType::Identifier, "staticMethod", TokenLiteral::Null, 1);
         let class_stmt = Stmt::C(ClassS {
             name: class_name.clone(),
             superclass: None,
@@ -528,6 +548,85 @@ mod tests {
         });
 
         let stmts = vec![class_stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_list_expression() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let list_expr = Expr::L(ListE::new(vec![
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(2.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(3.0))),
+        ]));
+
+        let stmt = Stmt::E(ExprS { expr: list_expr });
+        let stmts = vec![stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_list_get_expression() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let list_var = create_token(TokenType::Identifier, "myList", TokenLiteral::Null, 1);
+        let list_decl = Stmt::V(VarS {
+            name: list_var.clone(),
+            initializer: Some(Expr::L(ListE::new(vec![
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(2.0))),
+            ]))),
+        });
+
+        let list_get_expr = Expr::LG(ListGetE::new(
+            Expr::V(VariableE::new(list_var.clone())),
+            create_token(TokenType::RightBracket, "]", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(0.0))),
+        ));
+
+        let list_get_stmt = Stmt::E(ExprS {
+            expr: list_get_expr,
+        });
+
+        let stmts = vec![list_decl, list_get_stmt];
+        let result = resolver.resolve(&stmts);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_resolve_list_set_expression() {
+        let mut interpreter = Interpreter::new(false);
+        let mut resolver = Resolver::new(&mut interpreter);
+
+        let list_var = create_token(TokenType::Identifier, "myList", TokenLiteral::Null, 1);
+        let list_decl = Stmt::V(VarS {
+            name: list_var.clone(),
+            initializer: Some(Expr::L(ListE::new(vec![
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+                Expr::Li(LiteralE::new(TokenLiteral::NumberLit(2.0))),
+            ]))),
+        });
+
+        let list_set_expr = Expr::LS(ListSetE::new(
+            Expr::V(VariableE::new(list_var.clone())),
+            create_token(TokenType::RightBracket, "]", TokenLiteral::Null, 1),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(1.0))),
+            Expr::Li(LiteralE::new(TokenLiteral::NumberLit(42.0))),
+        ));
+
+        let list_set_stmt = Stmt::E(ExprS {
+            expr: list_set_expr,
+        });
+
+        let stmts = vec![list_decl, list_set_stmt];
         let result = resolver.resolve(&stmts);
 
         assert!(result.is_ok());

@@ -357,6 +357,56 @@ mod inheritance {
     }
 }
 
+mod lists {
+    use crate::test_lox_script;
+    use crate::ErrorType;
+
+    #[test]
+    fn test_get_and_set() {
+        test_lox_script(
+            "lists_get_and_set.lox",
+            ErrorType::None,
+            "[1, 2, 3]\n4\n[1, 4, 3]\n[1, 4, 3]\n2\n",
+            "",
+        );
+    }
+
+    #[test]
+    fn test_index_non_list() {
+        test_lox_script(
+            "lists_index_non_list.lox",
+            ErrorType::RuntimeError,
+            "",
+            "Runtime Error: [line 1] Error at '[': Only lists can be indexed.\n",
+        );
+    }
+
+    #[test]
+    fn test_index_not_a_number() {
+        test_lox_script(
+            "lists_index_not_a_number.lox",
+            ErrorType::RuntimeError,
+            "",
+            "Runtime Error: [line 1] Error at '[': Index must be a number.\n",
+        );
+    }
+
+    #[test]
+    fn test_index_out_of_bounds() {
+        test_lox_script(
+            "lists_index_out_of_bounds.lox",
+            ErrorType::RuntimeError,
+            "",
+            "Runtime Error: [line 1] Error at '[': Index out of bounds: 3\n",
+        );
+    }
+
+    #[test]
+    fn test_index_round_down() {
+        test_lox_script("lists_index_round_down.lox", ErrorType::None, "3\n", "");
+    }
+}
+
 mod numbers {
     use crate::test_lox_script;
     use crate::ErrorType;

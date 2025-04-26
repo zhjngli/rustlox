@@ -14,6 +14,9 @@ pub enum Expr {
     C(CallE),
     G(GetE),
     Gr(GroupingE),
+    L(ListE),
+    LG(ListGetE),
+    LS(ListSetE),
     Li(LiteralE),
     Lo(LogicalE),
     S(SetE),
@@ -39,6 +42,9 @@ impl Expr {
             Expr::C(e) => e.uid,
             Expr::G(e) => e.uid,
             Expr::Gr(e) => e.uid,
+            Expr::L(e) => e.uid,
+            Expr::LG(e) => e.uid,
+            Expr::LS(e) => e.uid,
             Expr::Li(e) => e.uid,
             Expr::Lo(e) => e.uid,
             Expr::S(e) => e.uid,
@@ -147,6 +153,61 @@ impl GroupingE {
         GroupingE {
             uid: ID.fetch_add(1, Ordering::Relaxed),
             expr: Box::new(expr),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ListE {
+    uid: usize,
+    pub elems: Vec<Expr>,
+}
+
+impl ListE {
+    pub fn new(elems: Vec<Expr>) -> Self {
+        ListE {
+            uid: ID.fetch_add(1, Ordering::Relaxed),
+            elems,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ListGetE {
+    uid: usize,
+    pub object: Box<Expr>,
+    pub bracket: TokenRef,
+    pub index: Box<Expr>,
+}
+
+impl ListGetE {
+    pub fn new(object: Expr, bracket: TokenRef, index: Expr) -> Self {
+        ListGetE {
+            uid: ID.fetch_add(1, Ordering::Relaxed),
+            object: Box::new(object),
+            bracket,
+            index: Box::new(index),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ListSetE {
+    uid: usize,
+    pub object: Box<Expr>,
+    pub bracket: TokenRef,
+    pub index: Box<Expr>,
+    pub value: Box<Expr>,
+}
+
+impl ListSetE {
+    pub fn new(object: Expr, bracket: TokenRef, index: Expr, value: Expr) -> Self {
+        ListSetE {
+            uid: ID.fetch_add(1, Ordering::Relaxed),
+            object: Box::new(object),
+            bracket,
+            index: Box::new(index),
+            value: Box::new(value),
         }
     }
 }
