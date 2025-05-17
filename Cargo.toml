@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "rlox"
-path = "src/main.rs"
+name = "rlox_tw"
+path = "src/treewalk/main.rs"
 
 [dependencies]
 enum_dispatch = "0.3.13"
